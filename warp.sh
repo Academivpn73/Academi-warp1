@@ -1,47 +1,39 @@
 #!/bin/bash
 
 clear
-
-echo -e "\e[1;32m"
-echo "═══════════════════════════════════════════════════════════"
-echo " Telegram: @Academi_vpn"
-echo " Admin: Mahdi"
-echo " WARP Real IP Scanner + Telegram Proxy Finder"
-echo "═══════════════════════════════════════════════════════════"
+echo -e "\e[1;35m╔══════════════════════════════════════╗"
+echo -e "║     Telegram: @Academi_vpn           ║"
+echo -e "║     Admin: Mahdi                     ║"
+echo -e "║     WARP Real IP Scanner & Proxy     ║"
+echo -e "╚══════════════════════════════════════╝\e[0m"
 echo ""
-echo " 1) Telegram Proxy Finder (From @opera_proxy)"
-echo " 2) WARP Real IP Scanner"
-echo " 3) Exit"
+echo -e "\e[1;36m1) WARP Real IP Scanner"
+echo -e "2) Telegram Proxy List\e[0m"
 echo ""
-read -p " Choose an option: " opt
+read -p "Choose an option [1-2]: " choice
 
-if [[ $opt == 1 ]]; then
-    echo ""
-    echo "[+] Getting latest Telegram proxies from @opera_proxy..."
-    echo ""
-
-    curl -s https://t.me/s/opera_proxy | grep -Eo 'tg://proxy\?server=[^"]+' | head -n 20
-
-elif [[ $opt == 2 ]]; then
+if [[ "$choice" == "2" ]]; then
     clear
-    echo "WARP Real IP Scanner"
+    echo -e "\e[1;32m===> Telegram Proxies:\e[0m"
     echo ""
-    echo " 1) IPv4"
-    echo " 2) IPv6"
-    read -p " Choose IP version: " ipver
+    
+    proxies=(
+    "https://t.me/proxy?server=silvermantain.cinere.info&port=443&secret=7hYDAQIAAQAB_AMDhuJMOt1tZWRpYS5zdGVhbXBvd2VyZWQuY29t"
+    "https://t.me/proxy?server=halftime.parsintalk.ir&port=443&secret=7hYDAQIAAQAB_AMDhuJMOt1tZWRpYS5zdGVhbXBvd2VyZWQuY29t"
+    "https://t.me/proxy?server=leveldaemi.fiziotr.info&port=443&secret=7hYDAQIAAQAB_AMDhuJMOt1tZWRpYS5zdGVhbXBvd2VyZWQuY29t"
+    "https://t.me/proxy?server=algortim.sayaair.ir&port=443&secret=ee1603010200010001fc030386e24c3add6d656469612e737465616d706f77657265642e636f6d"
+    "https://t.me/proxy?server=daem.fsaremi.info&port=443&secret=7hYDAQIAAQAB_AMDhuJMOt1tZWRpYS5zdGVhbXBvd2VyZWQuY29t"
+    # (ادامه لیست پروکسی‌ها...)
+    )
 
-    echo ""
-    echo "[+] Scanning for active WARP IPs with open ports..."
-    echo ""
-
-    for i in {1..10}; do
-        ip="162.159.192.$((RANDOM % 255))"
-        port=$((800 + RANDOM % 1000))
-        ping=$(ping -c1 -W1 $ip | grep 'time=' | awk -F'time=' '{print $2}' | cut -d' ' -f1)
-        echo "$ip:$port  ${ping:-timeout}ms"
+    for proxy in "${proxies[@]}"; do
+        echo -e "\e[1;34m$proxy\e[0m"
     done
 
-else
-    echo "Bye!"
-    exit
+    echo ""
+    echo -e "\e[1;36mCopy one of the above links and open in Telegram.\e[0m"
+    exit 0
 fi
+
+# ادامه اسکریپت WARP اسکنر اصلی اینجاست
+# ...
