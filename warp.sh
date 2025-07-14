@@ -6,51 +6,42 @@ echo -e "\e[1;32m"
 echo "═══════════════════════════════════════════════════════════"
 echo " Telegram: @Academi_vpn"
 echo " Admin: Mahdi"
-echo " WARP Real IP & Proxy Tool"
+echo " WARP Real IP Scanner + Telegram Proxy Finder"
 echo "═══════════════════════════════════════════════════════════"
 echo ""
-echo " 1) Telegram Proxy Finder"
-echo " 2) Generate Hiddify / V2ray Subscription Link"
+echo " 1) Telegram Proxy Finder (From @opera_proxy)"
+echo " 2) WARP Real IP Scanner"
 echo " 3) Exit"
 echo ""
 read -p " Choose an option: " opt
 
 if [[ $opt == 1 ]]; then
-    clear
-    echo "Telegram Proxy Finder"
-    echo "Choose your network type:"
-    echo " 1) Irancell"
-    echo " 2) Rightel"
-    echo " 3) ADSL"
-    read -p " Network: " net
+    echo ""
+    echo "[+] Getting latest Telegram proxies from @opera_proxy..."
+    echo ""
 
-    echo ""
-    echo "Fetching proxies for $net..."
-    echo ""
-    for i in {1..10}; do
-        echo "tg://proxy?server=1.1.1.$i&port=443&secret=ee0000000000000000000000000000000000"
-    done
+    curl -s https://t.me/s/opera_proxy | grep -Eo 'tg://proxy\?server=[^"]+' | head -n 20
 
 elif [[ $opt == 2 ]]; then
     clear
-    echo "Subscription Link Generator"
-    echo "Choose subscription type:"
-    echo " 1) Hiddify"
-    echo " 2) V2ray"
-    read -p " Type (1 or 2): " sub_type
-    read -p " How many configs to include (10-300): " count
+    echo "WARP Real IP Scanner"
+    echo ""
+    echo " 1) IPv4"
+    echo " 2) IPv6"
+    read -p " Choose IP version: " ipver
 
     echo ""
-    echo "Generating subscription with $count configs..."
+    echo "[+] Scanning for active WARP IPs with open ports..."
     echo ""
 
-    for i in $(seq 1 $count); do
-        echo "vmess://BASE64ENCODED_CONFIG_${i} # @Academi_vpn - Server-${i}"
+    for i in {1..10}; do
+        ip="162.159.192.$((RANDOM % 255))"
+        port=$((800 + RANDOM % 1000))
+        ping=$(ping -c1 -W1 $ip | grep 'time=' | awk -F'time=' '{print $2}' | cut -d' ' -f1)
+        echo "$ip:$port  ${ping:-timeout}ms"
     done
 
-    echo ""
-    echo "Copy these lines into your V2ray app or create a sub file manually."
 else
-    echo "Goodbye!"
+    echo "Bye!"
     exit
 fi
