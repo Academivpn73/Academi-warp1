@@ -1,116 +1,71 @@
 #!/bin/bash
 
-GREEN="\e[92m"
-RESET="\e[0m"
+green='\e[92m'
+reset='\e[0m'
 
 clear
-echo -e "$GREEN"
-echo "═════════════════════════════════════════════════════════════════"
-echo "           Telegram: @Academi_vpn"
-echo "           Admin Support: @MahdiAGM0"
-echo "           WARP IP SCANNER + Telegram Proxy"
-echo "═════════════════════════════════════════════════════════════════"
-echo -e "$RESET"
+echo -e "${green}"
+echo -e "╔══════════════════════════════════════════════════╗"
+echo -e "║              Telegram: @Academi_vpn             ║"
+echo -e "║            Admin Support: @MahdiAGM0            ║"
+echo -e "╚══════════════════════════════════════════════════╝"
+echo -e "${reset}"
 
-echo -e "$GREEN"
-echo "1) WARP IP Scanner"
-echo "2) Telegram Proxy List"
-read -p "Select an option: " choice
-echo -e "$RESET"
+echo -e "${green}1) Warp IP Scanner"
+echo "2) Telegram Proxy"
+echo -e "${reset}"
+read -p "Choose an option (1 or 2): " option
 
-# ------------------- [1] WARP SCANNER -------------------
-if [[ $choice == "1" ]]; then
-    echo -e "$GREEN"
-    echo "Choose IP Version:"
+if [[ $option == "1" ]]; then
+    echo -e "${green}IPv4 or IPv6?${reset}"
     echo "1) IPv4"
     echo "2) IPv6"
     read -p "Select: " ipver
-    read -p "How many working IPs to scan? " ip_count
-    echo -e "$RESET"
+    read -p "How many IPs to scan? " count
 
+    iplist=()
     if [[ $ipver == "1" ]]; then
-        ip_range="162.159"
-        ports=(443 80 8080 8443)
-    elif [[ $ipver == "2" ]]; then
-        ipv6_prefixes=(
-            "2606:4700:100::"
-            "2606:4700:d0::"
-            "2606:4700:3000::"
-            "2606:4700:4000::"
-        )
-        ports=(443 80 8080 8443)
-    else
-        echo "Invalid selection."
-        exit 1
-    fi
-
-    check_ip() {
-        ip=$1
-        for port in "${ports[@]}"; do
-            timeout 1 bash -c "</dev/tcp/$ip/$port" &>/dev/null
-            if [ $? -eq 0 ]; then
-                ping_result=$(ping -c1 -W1 $ip | grep 'time=' | awk -F'time=' '{print $2}' | awk '{print $1}')
-                if [[ ! -z "$ping_result" ]]; then
-                    echo -e "$GREEN$ip:$port  ${ping_result}ms$RESET"
-                    return 0
-                fi
+        base="162.159"
+        for ((i=0; i<$count; i++)); do
+            ip="$base.$((RANDOM % 255)).$((RANDOM % 255))"
+            port=$((800 + RANDOM % 200))  # پورت بین 800 تا 1000
+            ping_result=$(ping -c1 -W1 $ip | grep time= | awk -F'time=' '{print $2}' | cut -d' ' -f1)
+            if [[ -n $ping_result ]]; then
+                echo -e "${green}${ip}:$port  ${ping_result}ms${reset}"
             fi
         done
-        return 1
-    }
+    else
+        for ((i=0; i<$count; i++)); do
+            segment1=$(printf "%x" $((RANDOM%65536)))
+            segment2=$(printf "%x" $((RANDOM%65536)))
+            ip="2606:4700:$segment1::$segment2"
+            port=$((800 + RANDOM % 200))
+            ping6_result=$(ping6 -c1 -W1 $ip | grep time= | awk -F'time=' '{print $2}' | cut -d' ' -f1)
+            if [[ -n $ping6_result ]]; then
+                echo -e "${green}${ip}:$port  ${ping6_result}ms${reset}"
+            fi
+        done
+    fi
 
-    echo -e "$GREEN\nScanning for WARP IPs... Please wait.\n$RESET"
-    found=0
-    while [[ $found -lt $ip_count ]]; do
-        if [[ $ipver == "1" ]]; then
-            ip="$ip_range.$((RANDOM%256)).$((RANDOM%256))"
-        else
-            prefix=${ipv6_prefixes[$((RANDOM % ${#ipv6_prefixes[@]}))]}
-            hex1=$(printf "%x" $((RANDOM%65536)))
-            hex2=$(printf "%x" $((RANDOM%65536)))
-            ip="${prefix}${hex1}:${hex2}"
-        fi
-
-        result=$(check_ip $ip)
-        if [[ $? -eq 0 ]]; then
-            ((found++))
-        fi
-    done
-
-    echo -e "\n$GREEN══════════════  Done [$found IPs Found]  ══════════════$RESET"
-
-# ------------------- [2] PROXY LIST -------------------
-elif [[ $choice == "2" ]]; then
-    echo -e "$GREEN\nAvailable Telegram Proxies:\n$RESET"
-
+elif [[ $option == "2" ]]; then
+    echo -e "${green}Fetching Telegram Proxies...${reset}"
     proxies=(
-        "silvermantain.cinere.info:443"
-        "halftime.parsintalk.ir:443"
-        "leveldaemi.fiziotr.info:443"
-        "algortim.sayaair.ir:443"
-        "daem.fsaremi.info:443"
-        "sadra.mygrade.ir:443"
-        "iran-vatan.magalaiash.info:443"
-        "aval.fsaremi.info:443"
-        "wait.fiziotr.info:443"
-        "daemi-pr.shesh-station.ir:443"
-        "sibilkoloft.technote.ir:443"
-        "response.cinere.info:443"
-        "systemfull.gjesus.info:443"
-        "sebro.sheshko.info:443"
-        "syczleck.itemag.ir:443"
-        "phyzyk.nokande.info:443"
-        "chernobill.technote.ir:443"
-        "ryzen-gold.shesh-station.ir:443"
-    )
+"https://t.me/proxy?server=silvermantain.cinere.info&port=443&secret=7hYDAQIAAQAB_AMDhuJMOt1tZWRpYS5zdGVhbXBvd2VyZWQuY29t"
+"https://t.me/proxy?server=halftime.parsintalk.ir&port=443&secret=7hYDAQIAAQAB_AMDhuJMOt1tZWRpYS5zdGVhbXBvd2VyZWQuY29t"
+"https://t.me/proxy?server=leveldaemi.fiziotr.info&port=443&secret=7hYDAQIAAQAB_AMDhuJMOt1tZWRpYS5zdGVhbXBvd2VyZWQuY29t"
+"https://t.me/proxy?server=algortim.sayaair.ir&port=443&secret=ee1603010200010001fc030386e24c3add6d656469612e737465616d706f77657265642e636f6d"
+"https://t.me/proxy?server=daem.fsaremi.info&port=443&secret=7hYDAQIAAQAB_AMDhuJMOt1tZWRpYS5zdGVhbXBvd2VyZWQuY29t"
+"https://t.me/proxy?server=sadra.mygrade.ir&port=443&secret=7hYDAQIAAQAB_AMDhuJMOt1tZWRpYS5zdGVhbXBvd2VyZWQuY29t"
+"https://t.me/proxy?server=aval.fsaremi.info&port=443&secret=ee1603010200010001fc030386e24c3add6d656469612e737465616d706f77657265642e636f6d"
+"https://t.me/proxy?server=wait.fiziotr.info&port=443&secret=7hYDAQIAAQAB_AMDhuJMOt1tZWRpYS5zdGVhbXBvd2VyZWQuY29t"
+"https://t.me/proxy?server=daemi-pr.shesh-station.ir&port=443&secret=ee1603010200010001fc030386e24c3add6d656469612e737465616d706f77657265642e636f6d"
+"https://t.me/proxy?server=sibilkoloft.technote.ir&port=443&secret=ee1603010200010001fc030386e24c3add6d656469612e737465616d706f77657265642e636f6d"
+)
 
-    for proxy in "${proxies[@]}"; do
-        echo -e "$GREEN$proxy$RESET"
+    for p in "${proxies[@]}"; do
+        echo -e "${green}$p${reset}"
     done
-
-    echo -e "\nUse these proxies in Telegram settings > Data & Storage > Proxy.\n"
 
 else
-    echo "Invalid choice."
-    exit 1
+    echo -e "${green}Invalid option selected.${reset}"
 fi
