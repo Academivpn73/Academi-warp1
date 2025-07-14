@@ -1,112 +1,116 @@
 #!/bin/bash
 
-light_green='\033[1;32m'
-reset_color='\033[0m'
+GREEN="\e[92m"
+RESET="\e[0m"
 
 clear
-echo -e "${light_green}"
-echo -e "╔═══════════════════════════════════════════════╗"
-echo -e "║           Telegram: @Academi_vpn              ║"
-echo -e "║           WARP IP Scanner + Proxy Tool        ║"
-echo -e "╚═══════════════════════════════════════════════╝"
-echo -e "${reset_color}"
-echo ""
-echo -e "${light_green}1) WARP Real IP Scanner${reset_color}"
-echo -e "${light_green}2) Telegram Proxy List${reset_color}"
-echo ""
-read -p "Choose an option [1-2]: " choice
+echo -e "$GREEN"
+echo "═════════════════════════════════════════════════════════════════"
+echo "           Telegram: @Academi_vpn"
+echo "           Admin Support: @MahdiAGM0"
+echo "           WARP IP SCANNER + Telegram Proxy"
+echo "═════════════════════════════════════════════════════════════════"
+echo -e "$RESET"
 
-if [[ "$choice" == "2" ]]; then
-    clear
-    echo -e "${light_green}==> Telegram Proxy List:${reset_color}"
-    echo ""
+echo -e "$GREEN"
+echo "1) WARP IP Scanner"
+echo "2) Telegram Proxy List"
+read -p "Select an option: " choice
+echo -e "$RESET"
+
+# ------------------- [1] WARP SCANNER -------------------
+if [[ $choice == "1" ]]; then
+    echo -e "$GREEN"
+    echo "Choose IP Version:"
+    echo "1) IPv4"
+    echo "2) IPv6"
+    read -p "Select: " ipver
+    read -p "How many working IPs to scan? " ip_count
+    echo -e "$RESET"
+
+    if [[ $ipver == "1" ]]; then
+        ip_range="162.159"
+        ports=(443 80 8080 8443)
+    elif [[ $ipver == "2" ]]; then
+        ipv6_prefixes=(
+            "2606:4700:100::"
+            "2606:4700:d0::"
+            "2606:4700:3000::"
+            "2606:4700:4000::"
+        )
+        ports=(443 80 8080 8443)
+    else
+        echo "Invalid selection."
+        exit 1
+    fi
+
+    check_ip() {
+        ip=$1
+        for port in "${ports[@]}"; do
+            timeout 1 bash -c "</dev/tcp/$ip/$port" &>/dev/null
+            if [ $? -eq 0 ]; then
+                ping_result=$(ping -c1 -W1 $ip | grep 'time=' | awk -F'time=' '{print $2}' | awk '{print $1}')
+                if [[ ! -z "$ping_result" ]]; then
+                    echo -e "$GREEN$ip:$port  ${ping_result}ms$RESET"
+                    return 0
+                fi
+            fi
+        done
+        return 1
+    }
+
+    echo -e "$GREEN\nScanning for WARP IPs... Please wait.\n$RESET"
+    found=0
+    while [[ $found -lt $ip_count ]]; do
+        if [[ $ipver == "1" ]]; then
+            ip="$ip_range.$((RANDOM%256)).$((RANDOM%256))"
+        else
+            prefix=${ipv6_prefixes[$((RANDOM % ${#ipv6_prefixes[@]}))]}
+            hex1=$(printf "%x" $((RANDOM%65536)))
+            hex2=$(printf "%x" $((RANDOM%65536)))
+            ip="${prefix}${hex1}:${hex2}"
+        fi
+
+        result=$(check_ip $ip)
+        if [[ $? -eq 0 ]]; then
+            ((found++))
+        fi
+    done
+
+    echo -e "\n$GREEN══════════════  Done [$found IPs Found]  ══════════════$RESET"
+
+# ------------------- [2] PROXY LIST -------------------
+elif [[ $choice == "2" ]]; then
+    echo -e "$GREEN\nAvailable Telegram Proxies:\n$RESET"
 
     proxies=(
-    "https://t.me/proxy?server=silvermantain.cinere.info&port=443&secret=7hYDAQIAAQAB_AMDhuJMOt1tZWRpYS5zdGVhbXBvd2VyZWQuY29t"
-    "https://t.me/proxy?server=halftime.parsintalk.ir&port=443&secret=7hYDAQIAAQAB_AMDhuJMOt1tZWRpYS5zdGVhbXBvd2VyZWQuY29t"
-    "https://t.me/proxy?server=leveldaemi.fiziotr.info&port=443&secret=7hYDAQIAAQAB_AMDhuJMOt1tZWRpYS5zdGVhbXBvd2VyZWQuY29t"
-    # ... (ادامه پروکسی‌ها)
+        "silvermantain.cinere.info:443"
+        "halftime.parsintalk.ir:443"
+        "leveldaemi.fiziotr.info:443"
+        "algortim.sayaair.ir:443"
+        "daem.fsaremi.info:443"
+        "sadra.mygrade.ir:443"
+        "iran-vatan.magalaiash.info:443"
+        "aval.fsaremi.info:443"
+        "wait.fiziotr.info:443"
+        "daemi-pr.shesh-station.ir:443"
+        "sibilkoloft.technote.ir:443"
+        "response.cinere.info:443"
+        "systemfull.gjesus.info:443"
+        "sebro.sheshko.info:443"
+        "syczleck.itemag.ir:443"
+        "phyzyk.nokande.info:443"
+        "chernobill.technote.ir:443"
+        "ryzen-gold.shesh-station.ir:443"
     )
 
     for proxy in "${proxies[@]}"; do
-        echo -e "${light_green}$proxy${reset_color}"
+        echo -e "$GREEN$proxy$RESET"
     done
 
-    echo ""
-    echo -e "${light_green}Copy a link and open it in Telegram.${reset_color}"
-    exit 0
-fi
+    echo -e "\nUse these proxies in Telegram settings > Data & Storage > Proxy.\n"
 
-# ───────────────────────────────
-# بخش انتخاب نوع IP (IPv4 یا IPv6)
-# ───────────────────────────────
-clear
-echo -e "${light_green}Choose IP type to scan:${reset_color}"
-echo -e "${light_green}1) IPv4${reset_color}"
-echo -e "${light_green}2) IPv6${reset_color}"
-read -p "Enter choice [1-2]: " iptype
-
-# لیست IP و PORT
-if [[ "$iptype" == "1" ]]; then
-    echo -e "${light_green}Scanning IPv4 ...${reset_color}"
-    ip_list=(
-    "162.159.192.222:443"
-    "188.114.97.2:2086"
-    "104.16.0.1:8443"
-    "104.18.5.6:2087"
-    "162.159.193.123:80"
-    "188.114.96.7:443"
-    "104.18.10.2:2053"
-    "104.19.25.3:2096"
-    "104.26.3.2:2083"
-    "104.21.50.1:2052"
-    )
-elif [[ "$iptype" == "2" ]]; then
-    echo -e "${light_green}Scanning IPv6 ...${reset_color}"
-    ip_list=(
-    "[2606:4700:4700::1111]:443"
-    "[2606:4700:4700::1001]:443"
-    "[2001:4860:4860::8888]:443"
-    "[2001:4860:4860::8844]:443"
-    "[2a00:1450:4001:801::200e]:443"
-    "[2606:4700::6810:1215]:443"
-    "[2606:4700::6810:1115]:443"
-    "[2400:cb00:2049:1::a29f:8c]:443"
-    "[2606:4700:3034::ac43:d879]:443"
-    "[2a00:1450:4001:824::200e]:443"
-    )
 else
-    echo -e "Invalid choice."
+    echo "Invalid choice."
     exit 1
-fi
-
-# ───────────────────────────────
-# اسکن 10 IP فعال با پینگ
-# ───────────────────────────────
-
-found=0
-for ip_port in "${ip_list[@]}"; do
-    ip=$(echo "$ip_port" | cut -d: -f1 | sed 's/\[//;s/\]//')
-    port=$(echo "$ip_port" | cut -d: -f2)
-
-    # انتخاب نوع پینگ
-    if [[ "$iptype" == "1" ]]; then
-        ping_time=$(ping -c 1 -W 1 "$ip" | grep 'time=' | awk -F'time=' '{print $2}' | cut -d' ' -f1)
-    else
-        ping_time=$(ping6 -c 1 -W 1 "$ip" | grep 'time=' | awk -F'time=' '{print $2}' | cut -d' ' -f1)
-    fi
-
-    if [[ -n "$ping_time" ]]; then
-        echo -e "${light_green}${ip}:${port}  ${ping_time}ms${reset_color}"
-        ((found++))
-    fi
-
-    # فقط 10 آی‌پی موفق نشون بده
-    if [[ "$found" -ge 10 ]]; then
-        break
-    fi
-done
-
-if [[ "$found" -eq 0 ]]; then
-    echo -e "${light_green}No working IPs found.${reset_color}"
 fi
