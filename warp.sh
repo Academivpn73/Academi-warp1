@@ -55,13 +55,17 @@ test_ip() {
   IP=$1
   PORT=$2
 
+  echo "Testing IP: $IP with port: $PORT"
+
   if [[ "$PORT" != "No port" ]]; then
     # Test the IP with a port
     timeout 5 bash -c "</dev/tcp/$IP/$PORT" 2>/dev/null && echo -e "${GREEN}[+] WARP IP Found with port: $IP:$PORT${NC}" || echo -e "${YELLOW}[-] Port is not open for: $IP:$PORT${NC}"
-    ping -c 4 $IP && echo -e "${CYAN}Ping test successful for: $IP${NC}" || echo -e "${RED}Ping failed for: $IP${NC}"
+    ping_time=$(ping -c 1 $IP | grep time= | awk -F 'time=' '{print $2}' | cut -d ' ' -f1)
+    echo "$IP:$PORT  $ping_time ms"
   else
     echo -e "${YELLOW}[-] IPv6 does not have ports${NC}"
-    ping -c 4 $IP && echo -e "${CYAN}Ping test successful for: $IP${NC}" || echo -e "${RED}Ping failed for: $IP${NC}"
+    ping_time=$(ping -c 1 $IP | grep time= | awk -F 'time=' '{print $2}' | cut -d ' ' -f1)
+    echo "$IP  $ping_time ms"
   fi
 }
 
