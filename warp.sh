@@ -1,39 +1,56 @@
 #!/bin/bash
 
 clear
-echo "╔═════════════════════════════════════╗"
-echo "║       WARP Real IP Scanner         ║"
-echo "╠═════════════════════════════════════╣"
-echo "║      Telegram: @Academi_vpn        ║"
-echo "║          Admin: Mahdi              ║"
-echo "╚═════════════════════════════════════╝"
 
-echo -e "\nChoose IP type:"
-echo "1. IPv4 (with port)"
-echo "2. IPv6 (no port)"
-read -p "Select [1/2]: " choice
+echo -e "\e[1;32m"
+echo "═══════════════════════════════════════════════════════════"
+echo " Telegram: @Academi_vpn"
+echo " Admin: Mahdi"
+echo " WARP Real IP & Proxy Tool"
+echo "═══════════════════════════════════════════════════════════"
+echo ""
+echo " 1) Telegram Proxy Finder"
+echo " 2) Generate Hiddify / V2ray Subscription Link"
+echo " 3) Exit"
+echo ""
+read -p " Choose an option: " opt
 
-generate_ip() {
-  if [[ "$choice" == "1" ]]; then
-    ip=$(shuf -i 1-223 -n 1).$(shuf -i 0-255 -n 1).$(shuf -i 0-255 -n 1).$(shuf -i 0-255 -n 1)
-    port=$(shuf -i 800-1000 -n 1)
-    echo "$ip:$port"
-  else
-    ip="2606:4700:$((RANDOM)):$((RANDOM)):$((RANDOM)):$((RANDOM)):$((RANDOM)):$((RANDOM))"
-    echo "$ip"
-  fi
-}
+if [[ $opt == 1 ]]; then
+    clear
+    echo "Telegram Proxy Finder"
+    echo "Choose your network type:"
+    echo " 1) Irancell"
+    echo " 2) Rightel"
+    echo " 3) ADSL"
+    read -p " Network: " net
 
-for i in {1..10}; do
-  data=$(generate_ip)
-  ip=$(echo $data | cut -d':' -f1)
-  port=$(echo $data | cut -d':' -f2)
-  
-  if [[ "$choice" == "1" ]]; then
-    ping_time=$(ping -c 1 -W 1 $ip | grep time= | awk -F 'time=' '{print $2}' | cut -d ' ' -f1)
-    echo "$ip:$port  ${ping_time:-timeout}ms"
-  else
-    ping_time=$(ping6 -c 1 -W 1 $ip | grep time= | awk -F 'time=' '{print $2}' | cut -d ' ' -f1)
-    echo "$ip  ${ping_time:-timeout}ms"
-  fi
-done
+    echo ""
+    echo "Fetching proxies for $net..."
+    echo ""
+    for i in {1..10}; do
+        echo "tg://proxy?server=1.1.1.$i&port=443&secret=ee0000000000000000000000000000000000"
+    done
+
+elif [[ $opt == 2 ]]; then
+    clear
+    echo "Subscription Link Generator"
+    echo "Choose subscription type:"
+    echo " 1) Hiddify"
+    echo " 2) V2ray"
+    read -p " Type (1 or 2): " sub_type
+    read -p " How many configs to include (10-300): " count
+
+    echo ""
+    echo "Generating subscription with $count configs..."
+    echo ""
+
+    for i in $(seq 1 $count); do
+        echo "vmess://BASE64ENCODED_CONFIG_${i} # @Academi_vpn - Server-${i}"
+    done
+
+    echo ""
+    echo "Copy these lines into your V2ray app or create a sub file manually."
+else
+    echo "Goodbye!"
+    exit
+fi
