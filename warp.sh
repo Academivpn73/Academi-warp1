@@ -1,90 +1,88 @@
-#!/bin/bash
+#!/data/data/com.termux/files/usr/bin/bash
 
-VERSION="1.0.4"
-BIN_PATH="/data/data/com.termux/files/usr/bin/Academivpn_warp"
+# 🔧 اطلاعات اسکریپت
+title="Academi VPN WARP Toolkit"
+version="v2.0.0"
+admin="@MahdiAGM0"
 
-# ========== Install Dependencies ==========
-install_dependencies() {
-  echo -e "\nInstalling required packages..."
-  apt update -y > /dev/null 2>&1
-  apt install -y curl wget jq netcat unzip > /dev/null 2>&1
+# 🌐 نصب پیش‌نیازها
+install_requirements() {
+  echo -e "\n🔧 Installing requirements...\n"
+  pkg update -y &>/dev/null
+  pkg install -y curl wget grep sed awk coreutils util-linux &>/dev/null
+  echo -e "✔️ Requirements installed.\n"
 }
 
-# ========== WARP Scanner ==========
+# 🚀 نصب اینستالر
+install_installer() {
+  cat <<EOF > /data/data/com.termux/files/usr/bin/Academivpn_warp
+#!/data/data/com.termux/files/usr/bin/bash
+bash \$HOME/warp.sh
+EOF
+  chmod +x /data/data/com.termux/files/usr/bin/Academivpn_warp
+  echo -e "\n✅ Installer installed. Run with: Academivpn_warp"
+}
+
+# ❌ حذف اینستالر
+remove_installer() {
+  rm -f /data/data/com.termux/files/usr/bin/Academivpn_warp
+  echo -e "\n🗑️ Installer removed."
+}
+
+# 🌍 اسکن آی‌پی‌های WARP
 warp_scan() {
   echo -e "\n[+] Scanning best WARP IPv4 IPs..."
-  ips_found=0
-  for i in {1..250}; do
-    ip=$(shuf -n 1 -i 162.159.192.0-162.159.255.255)
-    for port in 80 443 2086 2087 2052 2053 2095 2096 8080 8443; do
-      ping_output=$(ping -c 1 -W 1 $ip | grep 'time=')
-      if [[ $ping_output ]]; then
-        ping_ms=$(echo "$ping_output" | grep -oP 'time=\K[0-9.]+')
-        echo "$ip:$port  Ping: ${ping_ms}ms"
-        ((ips_found++))
+
+  base_ip="162.159"
+  scanned=0
+  found=0
+
+  while [[ $scanned -lt 50 && $found -lt 10 ]]; do
+    o3=$((RANDOM % 64 + 192))  # 192-255
+    o4=$((RANDOM % 256))       # 0-255
+    ip="$base_ip.$o3.$o4"
+
+    for port in 443 80; do
+      ping_ms=$(ping -c 1 -W 1 "$ip" 2>/dev/null | grep -oP 'time=\K[0-9.]+')
+      if [[ -n "$ping_ms" ]]; then
+        echo "[✔] $ip:$port → Ping: ${ping_ms} ms"
+        ((found++))
         break
       fi
-      [[ $ips_found -ge 10 ]] && break 2
     done
+
+    ((scanned++))
   done
-  [[ $ips_found -eq 0 ]] && echo "[!] No working IPs found."
+
+  [[ $found -eq 0 ]] && echo "[!] No working IPs found."
 }
 
-# ========== Telegram Proxy ==========
-fetch_proxies() {
-  echo -e "\n[+] Fetching fresh Telegram proxies..."
-  proxies=$(curl -s https://raw.githubusercontent.com/hookzof/socks5_list/master/tg.txt | head -n 10)
-  if [[ -z "$proxies" ]]; then
-    echo "[!] Failed to fetch proxies."
-  else
-    echo "[✔] Found Proxies:"
-    echo "$proxies"
-  fi
-}
-
-# ========== Installer ==========
-install_launcher() {
-  echo -e "\n[+] Installing launcher as 'Academivpn_warp'..."
-  echo "bash $(realpath "$0")" > "$BIN_PATH"
-  chmod +x "$BIN_PATH"
-  echo "[✔] Installed. You can now run: Academivpn_warp"
-}
-
-uninstall_launcher() {
-  if [[ -f "$BIN_PATH" ]]; then
-    rm "$BIN_PATH"
-    echo "[✔] Launcher removed."
-  else
-    echo "[!] Launcher not found."
-  fi
-}
-
-# ========== Main Menu ==========
+# 🎛️ منوی اصلی
 main_menu() {
-  while true; do
-    echo -e "\n=============== Academi VPN Menu ==============="
-    echo "Version: $VERSION"
-    echo "Channel: @Academi_vpn"
-    echo "Admin:   @MahdiAGM0"
-    echo "-----------------------------------------------"
-    echo "1. WARP IP Scanner"
-    echo "2. Telegram Proxy"
-    echo "3. Install Launcher (Academivpn_warp)"
-    echo "4. Uninstall Launcher"
-    echo "5. Exit"
-    echo "-----------------------------------------------"
-    read -p "Select option: " choice
-    case "$choice" in
-      1) warp_scan ;;
-      2) fetch_proxies ;;
-      3) install_launcher ;;
-      4) uninstall_launcher ;;
-      5) echo "Goodbye!"; exit 0 ;;
-      *) echo "[!] Invalid choice." ;;
-    esac
-  done
+  clear
+  echo -e "┌──────────────────────────────────────────┐"
+  echo -e "│   ${title} ${version}"
+  echo -e "│   Admin: ${admin}"
+  echo -e "└──────────────────────────────────────────┘"
+
+  echo -e "\n1️⃣ نصب اینستالر (Academivpn_warp)"
+  echo -e "2️⃣ حذف اینستالر"
+  echo -e "3️⃣ اسکن آی‌پی‌های WARP"
+  echo -e "0️⃣ خروج"
+  echo -ne "\n📥 انتخاب شما: "; read choice
+
+  case "$choice" in
+    1) install_installer ;;
+    2) remove_installer ;;
+    3) warp_scan ;;
+    0) exit 0 ;;
+    *) echo -e "\n❗ گزینه نامعتبر."; sleep 1 ;;
+  esac
+
+  echo -e "\n↩️ بازگشت به منو..."; sleep 2
+  main_menu
 }
 
-# Run
-install_dependencies
+# ▶️ شروع برنامه
+install_requirements
 main_menu
