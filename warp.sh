@@ -1,54 +1,54 @@
 #!/bin/bash
 
-# ─── COLORS ─────────────────────────────────────────────────────────────
+# ════[ رنگ‌ها ]════
 GREEN="\e[32m"
 RED="\e[31m"
 CYAN="\e[36m"
 YELLOW="\e[33m"
 NC="\e[0m"
 
-# ─── TITLE ──────────────────────────────────────────────────────────────
+# ════[ هدر ]════
 clear
-echo -e "${CYAN}╔══════════════════════════════════════════════╗"
-echo -e "║         ${GREEN}Academi WARP Toolkit ${YELLOW}v1.0.0${CYAN}              ║"
-echo -e "║   ${NC}Channel: @Academi_vpn${CYAN}     Admin: @MahdiAGM0   ║"
-echo -e "╚══════════════════════════════════════════════╝${NC}"
+echo -e "${CYAN}╔════════════════════════════════════════════════════╗"
+echo -e "║     ${GREEN}Academi WARP Toolkit ${YELLOW}v1.1.0${CYAN}                  ║"
+echo -e "║ ${NC}Channel: @Academi_vpn   ${CYAN}Support: @MahdiAGM0        ║"
+echo -e "╚════════════════════════════════════════════════════╝${NC}"
 echo ""
 
-# ─── CHECK DEPENDENCIES ────────────────────────────────────────────────
+# ════[ نصب ابزارها ]════
 install_dependencies() {
   echo -e "${YELLOW}🔧 Installing requirements...${NC}"
   pkg update -y >/dev/null 2>&1
-  pkg install curl jq -y >/dev/null 2>&1
+  pkg install curl jq wireguard -y >/dev/null 2>&1
+  if ! command -v wgcf &>/dev/null; then
+    curl -sL https://github.com/ViRb3/wgcf/releases/latest/download/wgcf_$(uname -m | sed 's/aarch64/arm64/;s/armv7l/armv6l/') -o wgcf
+    chmod +x wgcf
+    mv wgcf /data/data/com.termux/files/usr/bin/
+  fi
 }
 
-# ─── FETCH TELEGRAM PROXIES ────────────────────────────────────────────
+# ════[ بخش پروکسی تلگرام ]════
 telegram_proxy_fetcher() {
   echo -e "${CYAN}\n🌐 Fetching fresh Telegram proxies...${NC}"
-  sleep 1
-  urls=(
+  sources=(
     "https://raw.githubusercontent.com/hookzof/socks5_list/master/tg/mtproto.txt"
-    "https://raw.githubusercontent.com/TheSpeedX/TBomb/master/core/proxies/mtproto.txt"
+    "https://raw.githubusercontent.com/ejnv/freemtproto/main/proxies.txt"
   )
-  for url in "${urls[@]}"; do
-    proxies=$(curl -s "$url" | grep '^tg://' | head -n 10)
+  for url in "${sources[@]}"; do
+    proxies=$(curl -s --max-time 5 "$url" | grep '^tg://' | head -n 10)
     if [[ -n "$proxies" ]]; then
-      echo -e "${GREEN}✔ Showing 10 fresh proxies from $url:${NC}"
+      echo -e "${GREEN}✔ Found proxies from $url:${NC}"
       echo "$proxies" | nl -w2 -s'. '
       return
     fi
   done
-  echo -e "${RED}❌ Failed to fetch proxies from all sources.${NC}"
+  echo -e "${RED}❌ No working proxies found.${NC}"
 }
 
-# ─── WARP SCANNER ───────────────────────────────────────────────────────
+# ════[ بخش اسکن WARP IP ]════
 warp_scanner() {
   echo -e "${CYAN}\n🔍 Scanning best WARP IPv4 IPs...${NC}"
-  sleep 1
-
-  # Example CIDRs from Cloudflare (replace with full list as needed)
   cidr_blocks=("162.159.192.0/24" "188.114.96.0/24")
-
   ips=()
   while [[ ${#ips[@]} -lt 10 ]]; do
     cidr=${cidr_blocks[$RANDOM % ${#cidr_blocks[@]}]}
@@ -65,34 +65,51 @@ warp_scanner() {
     done
     [[ ${#ips[@]} -ge 10 ]] && break
   done
-
   [[ ${#ips[@]} -eq 0 ]] && echo -e "${RED}❌ No responsive IPs found.${NC}"
 }
 
-# ─── MAIN MENU ──────────────────────────────────────────────────────────
+# ════[ ساخت کانفیگ واقعی وایرگارد ]════
+generate_wireguard_config() {
+  echo -e "${CYAN}\n🛠 Generating real WireGuard config via Cloudflare...${NC}"
+  mkdir -p ~/wg_academi
+  cd ~/wg_academi || return
+  wgcf register --accept-tos >/dev/null 2>&1
+  wgcf generate >/dev/null 2>&1
+  if [[ -f wgcf-profile.conf ]]; then
+    echo -e "${GREEN}✔ WireGuard config generated at ~/wg_academi/wgcf-profile.conf${NC}"
+    echo ""
+    cat wgcf-profile.conf | grep -v '^#' | head -n 20
+  else
+    echo -e "${RED}❌ Failed to generate config.${NC}"
+  fi
+}
+
+# ════[ منوی اصلی ]════
 main_menu() {
   echo -e "\n${CYAN}Select an option:${NC}"
   echo -e " 1️⃣  WARP IPv4 Scanner"
   echo -e " 2️⃣  Telegram Proxies"
+  echo -e " 3️⃣  Generate Real WireGuard Config"
   echo -e " 0️⃣  Exit"
   echo -en "${YELLOW}\nEnter choice: ${NC}"
   read choice
   case $choice in
     1) warp_scanner ;;
     2) telegram_proxy_fetcher ;;
+    3) generate_wireguard_config ;;
     0) exit 0 ;;
     *) echo -e "${RED}❌ Invalid choice!${NC}" && sleep 1 && main_menu ;;
   esac
 }
 
-# ─── INSTALLER SETUP ────────────────────────────────────────────────────
+# ════[ نصب شورتکات ]════
 installer_setup() {
   chmod +x "$0"
   cp "$0" /data/data/com.termux/files/usr/bin/Academi_warp 2>/dev/null
   echo -e "${GREEN}✔ You can now run this script with: ${CYAN}Academi_warp${NC}"
 }
 
-# ─── RUN ────────────────────────────────────────────────────────────────
+# ════[ اجرا ]════
 install_dependencies
 installer_setup
 main_menu
