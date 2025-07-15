@@ -1,106 +1,93 @@
-#!/bin/bash
-
-VERSION="1.0.6"
+#!/usr/bin/env bash
+VERSION="1.0.0"
 CHANNEL="@Academi_vpn"
 ADMIN="@MahdiAGM0"
 
-install_dependencies() {
-  for pkg in curl jq; do
+GREEN='\e[1;32m'; YELLOW='\e[1;33m'; CYAN='\e[1;36m'; RED='\e[1;31m'; NC='\e[0m'
+PROXY_DIR="proxies"; PROXY_FILE="$PROXY_DIR/list.txt"; IP_FILE="warp_ips.txt"
+
+install_req() {
+  for pkg in curl jq ping; do
     if ! command -v $pkg >/dev/null 2>&1; then
-      echo "Installing $pkg..."
-      apt update -y >/dev/null 2>&1
-      apt install -y $pkg >/dev/null 2>&1
+      echo -e "${YELLOW}Installing $pkg...${NC}"
+      pkg install -y $pkg >/dev/null 2>&1 || apt-get install -y $pkg >/dev/null 2>&1
     fi
   done
 }
 
 print_header() {
   clear
-  echo -e "\e[1;35m┌──────────────────────────────────────┐\e[0m"
-  echo -e "\e[1;36m│      Academi VPN Script $VERSION         \e[0m"
-  echo -e "\e[1;35m├──────────────────────────────────────┤\e[0m"
-  echo -e "\e[1;32m│ Channel : $CHANNEL\e[0m"
-  echo -e "\e[1;32m│ Admin   : $ADMIN\e[0m"
-  echo -e "\e[1;35m└──────────────────────────────────────┘\e[0m"
+  echo -e "${CYAN}┌──────────────────────────────┐${NC}"
+  echo -e "${CYAN}│   Academi VPN Tool v$VERSION   │${NC}"
+  echo -e "${CYAN}├──────────────────────────────┤${NC}"
+  echo -e "${GREEN}│ Channel: $CHANNEL"
+  echo -e "│ Admin:   $ADMIN${NC}"
+  echo -e "${CYAN}└──────────────────────────────┘${NC}"
 }
 
 warp_scan() {
-  echo -e "\n\e[1;36mScanning Best WARP IPv4 IPs...\e[0m"
-  echo -e "\e[1;32m--------------------------------------------\e[0m"
-  local count=0
-
-  while [ $count -lt 10 ]; do
-    IP=$(curl -s4 --connect-timeout 3 https://speed.cloudflare.com/meta | jq -r '.client.ip')
+  > $IP_FILE
+  echo -e "\n${CYAN}Scanning real WARP IPv4 IPs...${NC}"
+  local c=0
+  while [[ $c -lt 10 ]]; do
+    IP=$(curl -s4 --connect-timeout 2 https://speed.cloudflare.com/meta | jq -r '.client.ip')
     if [[ -z "$IP" || "$IP" == "null" ]]; then
-      continue
+      sleep 1; continue
     fi
-    PORT=$((RANDOM % 64512 + 1024))
-    PING=$(ping -c1 -W1 "$IP" | grep 'time=' | awk -F'time=' '{print $2}' | cut -d' ' -f1)
-    if [[ $PING != "" ]]; then
-      echo -e "\e[1;33m$IP:$PORT \e[0m Ping: \e[1;32m$PING ms\e[0m"
-      ((count++))
+    port=443
+    ping_ms=$(ping -c1 -W1 "$IP" 2>/dev/null | grep time= | awk -F'time=' '{print $2}' | cut -d' ' -f1)
+    if [[ -n "$ping_ms" ]]; then
+      echo -e "${GREEN}$IP:$port  Ping: $ping_ms ms${NC}"
+      echo "$IP:$port  Ping: $ping_ms ms" >> $IP_FILE
+      ((c++))
     fi
+    sleep 1
   done
-
-  echo -e "\e[1;32m--------------------------------------------\e[0m"
-  read -p "Press enter to return to menu..."
+  if [[ $c -eq 0 ]]; then
+    echo -e "${RED}No real WARP IP found!${NC}"
+  fi
+  read -p "Press Enter to return..."
 }
 
 fetch_proxies() {
-  mkdir -p proxies
-
-  echo -e "\e[1;36mFetching Telegram proxies...\e[0m"
-
-  # Fetch proxies from open APIs
-  curl -s https://raw.githubusercontent.com/hookzof/socks5_list/master/tg.txt -o proxies/tmp1.txt
-  curl -s https://raw.githubusercontent.com/roosterkid/openproxylist/main/Telegram/proxies.txt -o proxies/tmp2.txt
-  curl -s https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/telegram.txt -o proxies/tmp3.txt
-
-  # Merge and clean
-  cat proxies/tmp*.txt | grep -E '^tg://' | sort | uniq | head -n 20 > proxies/list.txt
-
-  # Clean temp
-  rm proxies/tmp*.txt
+  mkdir -p $PROXY_DIR
+  echo -e "${CYAN}Fetching Telegram MTProto proxies...${NC}"
+  curl -s https://raw.githubusercontent.com/ALIILAPRO/MTProtoProxy/main/mtproto.txt -o "$PROXY_DIR/tmp.txt"
+  grep '^tg://' "$PROXY_DIR/tmp.txt" | sort -u | head -n 20 > $PROXY_FILE
+  rm "$PROXY_DIR/tmp.txt"
 }
 
 show_proxies() {
-  if [[ ! -f proxies/list.txt ]]; then
-    fetch_proxies
-  fi
-
-  echo -e "\n\e[1;36mLatest Telegram Proxies:\e[0m"
-  echo -e "\e[1;32m--------------------------------------------\e[0m"
-  cat proxies/list.txt | nl
-  echo -e "\e[1;32m--------------------------------------------\e[0m"
-  read -p "Press enter to return to menu..."
+  if [[ ! -f $PROXY_FILE ]]; then fetch_proxies; fi
+  echo -e "\n${CYAN}Telegram MTProto Proxies (top 10):${NC}"
+  head -n 10 $PROXY_FILE | nl -w2 -s'. '
+  echo -e "${CYAN}\nLast Updated: $(date)${NC}"
+  read -p "Press Enter to return..."
 }
 
-auto_update_proxies() {
+auto_fetch_proxies() {
   while true; do
     fetch_proxies
-    sleep 18000  # 5 hours = 18000 seconds
+    sleep 18000
   done
 }
 
 main_menu() {
   while true; do
     print_header
-    echo -e "\n\e[1;36m[1]\e[0m Warp IPv4 Scanner"
-    echo -e "\e[1;36m[2]\e[0m Telegram Proxy List"
-    echo -e "\e[1;36m[0]\e[0m Exit"
-    echo -ne "\n\e[1;33mSelect an option:\e[0m "
-    read choice
-
-    case "$choice" in
+    echo -e "\n${YELLOW}1) Warp IPv4 Scanner"
+    echo -e "2) Telegram Proxy List"
+    echo -e "0) Exit${NC}"
+    read -rp $'\nChoose option: ' opt
+    case $opt in
       1) warp_scan ;;
       2) show_proxies ;;
-      0) exit 0 ;;
-      *) echo -e "\e[1;31mInvalid option!\e[0m"; sleep 1 ;;
+      0) exit ;;
+      *) echo -e "${RED}Invalid option${NC}"; sleep 1 ;;
     esac
   done
 }
 
-install_dependencies
-auto_update_proxies &
-
+install_req
+auto_fetch_proxies &>/dev/null &
 main_menu
