@@ -1,120 +1,119 @@
-#!/data/data/com.termux/files/usr/bin/bash
+#!/bin/bash
 
-# اطلاعات
-ADMIN_ID="@AcademiVPN"
-CHANNEL_ID="@AcademiProxies"
-VERSION="1.6.1"
-PROXY_FILE="proxies.txt"
+# =========[ Setup Variables ]=========
+PROXY_FILE="/tmp/telegram_proxies.txt"
+VERSION="1.6.0"
+CHANNEL="@Academi_vpn"
+ADMIN="@MahdiAGM0"
 
-# چک و نصب ابزارهای مورد نیاز
-check_dependencies() {
-  echo -e "\n🔍 Checking & Installing required packages..."
-  for pkg in curl jq ping unzip wget; do
-    if ! command -v $pkg &>/dev/null; then
-      echo "📦 Installing $pkg..."
-      pkg install -y $pkg &>/dev/null
-    fi
-  done
+# =========[ Auto Dependency Installer ]=========
+install_dependencies() {
+    echo "📦 Installing required packages..."
+    pkg update -y >/dev/null 2>&1
+    pkg install curl jq -y >/dev/null 2>&1
 }
 
-# حذف لانچر
-remove_launcher() {
-  echo -e "\n🗑️ Removing launcher..."
-  rm -f ~/../usr/bin/warp
-  echo "✅ Launcher removed."
-}
-
-# نصب لانچر
-install_launcher() {
-  echo -e "\n🚀 Installing launcher..."
-  SCRIPT_URL="https://raw.githubusercontent.com/Academivpn73/Academi-warp1/main/warp.sh"
-  wget -q -O ~/warp "$SCRIPT_URL"
-  chmod +x ~/warp
-  cp ~/warp ~/../usr/bin/warp
-  echo "✅ Launcher installed. Just type: warp"
-}
-
-# دریافت پروکسی‌ها
+# =========[ Fetch MTProto Proxies ]=========
 fetch_proxies() {
-  echo -e "\n🌐 Fetching Telegram proxies..."
-  URL="https://raw.githubusercontent.com/ejabberd-contrib/proxy-list/main/mtproto.json"
-  PROXIES=$(curl -s "$URL" | jq -r '.[] | "\(.host):\(.port)"')
+    echo "🔄 Fetching fresh Telegram proxies..."
+    curl -s "https://raw.githubusercontent.com/hookzof/socks5_list/master/tg/mtproto.txt" -o "$PROXY_FILE"
 
-  if [[ -z "$PROXIES" ]]; then
-    echo "❌ No valid Telegram proxies found."
-    return 1
-  fi
+    if [[ ! -s "$PROXY_FILE" ]]; then
+        echo "❌ No valid Telegram proxies found."
+        return 1
+    fi
 
-  echo "$PROXIES" > "$PROXY_FILE"
-  echo "✅ Proxies updated successfully."
+    echo "✅ Proxies updated."
+    return 0
 }
 
-# نمایش پروکسی‌ها با پینگ
-show_proxies() {
-  [[ ! -f "$PROXY_FILE" ]] && echo "⚠️ Proxy list not found. Updating..." && fetch_proxies
-  echo -e "\n========= 🌍 TOP 10 TELEGRAM PROXIES ========="
-  count=1
-  while IFS= read -r proxy && [[ $count -le 10 ]]; do
-    host=$(echo "$proxy" | cut -d: -f1)
-    port=$(echo "$proxy" | cut -d: -f2)
-    ping_val=$(ping -c 1 -W 1 "$host" | grep 'time=' | awk -F'time=' '{print $2}' | cut -d' ' -f1)
-    [[ -z "$ping_val" ]] && ping_val="Timeout"
-    echo "Proxy $count: $proxy - Ping: $ping_val ms"
-    ((count++))
-  done < "$PROXY_FILE"
-  echo "=============================================="
+# =========[ Auto-update every 5 hours ]=========
+auto_update_proxies() {
+    while true; do
+        fetch_proxies
+        sleep 18000  # 5 hours
+    done &
 }
 
-# تولید 10 آی‌پی وارپ
-generate_warp_ips() {
-  echo -e "\n🔁 Generating 10 WARP IPs:"
-  for i in {1..10}; do
-    ip=$(curl -s https://api64.ipify.org)
-    loc=$(curl -s https://ipapi.co/$ip/country_name)
-    echo "IP $i: $ip - Location: $loc"
-    sleep 1
-  done
+# =========[ Display Title ]=========
+print_title() {
+    clear
+    echo -e "\e[1;34m===========================================\e[0m"
+    echo -e "\e[1;32m AcademiVPN Panel - Warp & Proxy Tool\e[0m"
+    echo -e "\e[1;34m===========================================\e[0m"
+    echo -e "Version : \e[1;33m$VERSION\e[0m"
+    echo -e "Channel : \e[1;36m$CHANNEL\e[0m"
+    echo -e "Admin   : \e[1;36m$ADMIN\e[0m"
+    echo -e "\e[1;34m===========================================\e[0m"
 }
 
-# نمایش عنوان زیبا
-show_title() {
-  clear
-  echo -e "╔══════════════════════════════════════╗"
-  echo -e "║  ⚡ TELEGRAM PROXY & WARP TOOL       ║"
-  echo -e "╠══════════════════════════════════════╣"
-  echo -e "║ 🆔 Admin   : $ADMIN_ID"
-  echo -e "║ 📡 Channel : $CHANNEL_ID"
-  echo -e "║ 🔖 Version : $VERSION"
-  echo -e "╚══════════════════════════════════════╝"
-}
-
-# منوی اصلی
+# =========[ Main Menu ]=========
 main_menu() {
-  while true; do
-    show_title
-    echo -e "1️⃣  Show Top 10 Telegram Proxies"
-    echo -e "2️⃣  ❌ Remove Launcher"
-    echo -e "3️⃣  🌐 Install Launcher"
-    echo -e "4️⃣  💎 Generate 10 WARP IPs"
-    echo -e "5️⃣  ♻️  Enable Daily Proxy Auto-Update"
-    echo -e "0️⃣  Exit"
-    echo -ne "\n>> "
-    read -r opt
+    while true; do
+        print_title
+        echo -e "\n[1] Generate Warp IPs"
+        echo "[2] Install/Uninstall Installer Command"
+        echo "[3] Show Telegram MTProto Proxies"
+        echo "[4] Exit"
+        echo -ne "\nSelect an option: "; read choice
 
-    case "$opt" in
-      1) show_proxies ;;
-      2) remove_launcher ;;
-      3) install_launcher ;;
-      4) generate_warp_ips ;;
-      5) fetch_proxies ;;
-      0) echo "👋 Goodbye!"; exit ;;
-      *) echo "❗ Invalid option." ;;
-    esac
-
-    echo -e "\nPress Enter to return to menu..."; read
-  done
+        case $choice in
+            1)
+                echo -e "\n🔍 Generating 10 Warp IPs with random ports...\n"
+                for i in {1..10}; do
+                    ip=$(curl -s https://api64.ipify.org)
+                    port=$((RANDOM % 65535 + 1))
+                    echo "IP $i: $ip:$port"
+                done
+                echo -e "\nPress Enter to return..."
+                read
+                ;;
+            2)
+                echo -e "\n[1] Install command (Academivpn_warp)"
+                echo "[2] Uninstall command"
+                echo "[3] Back"
+                echo -ne "Select: "; read opt
+                if [[ $opt == 1 ]]; then
+                    cp "$0" /data/data/com.termux/files/usr/bin/Academivpn_warp
+                    chmod +x /data/data/com.termux/files/usr/bin/Academivpn_warp
+                    echo "✅ Installed. Now run: Academivpn_warp"
+                    sleep 2
+                elif [[ $opt == 2 ]]; then
+                    rm -f /data/data/com.termux/files/usr/bin/Academivpn_warp
+                    echo "🗑️ Uninstalled successfully."
+                    sleep 1
+                fi
+                ;;
+            3)
+                echo -e "\n🌐 Top 10 Telegram MTProto Proxies:\n"
+                if [[ ! -s "$PROXY_FILE" ]]; then
+                    fetch_proxies || {
+                        echo -e "\nPress Enter to return..."; read
+                        continue
+                    }
+                fi
+                COUNT=1
+                while IFS= read -r line && [[ $COUNT -le 10 ]]; do
+                    echo "Proxy $COUNT: $line"
+                    ((COUNT++))
+                done < "$PROXY_FILE"
+                echo -e "\nPress Enter to return..."
+                read
+                ;;
+            4)
+                echo -e "\n👋 Exiting..."
+                exit 0
+                ;;
+            *)
+                echo -e "\n❌ Invalid option."
+                sleep 1
+                ;;
+        esac
+    done
 }
 
-# اجرای همه مراحل
-check_dependencies
+# =========[ Main Execution ]=========
+install_dependencies
+fetch_proxies
+auto_update_proxies
 main_menu
