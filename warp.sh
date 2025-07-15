@@ -1,117 +1,97 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
-VERSION="1.2.0"
+VERSION="1.3.0"
 ALIAS_PATH="/data/data/com.termux/files/usr/bin/Academi_warp"
 
-GREEN="\033[0;32m"
-CYAN="\033[0;36m"
-YELLOW="\033[1;33m"
-RED="\033[0;31m"
-NC="\033[0m"
+GREEN="\033[0;32m"; CYAN="\033[0;36m"
+YELLOW="\033[1;33m"; RED="\033[0;31m"; NC="\033[0m"
 
 install_requirements() {
-    echo -e "${YELLOW}🔧 Installing requirements...${NC}"
-    pkg update -y > /dev/null
-    pkg install curl wget jq bash -y > /dev/null
-}
-
-install_alias() {
-    cp "$0" "$ALIAS_PATH"
-    chmod +x "$ALIAS_PATH"
-    echo -e "${GREEN}✔ Installed! Now you can run: ${CYAN}Academi_warp${NC}"
-}
-
-remove_alias() {
-    rm -f "$ALIAS_PATH"
-    echo -e "${RED}✖ Alias removed!${NC}"
-}
-
-fetch_proxies() {
-    echo -e "${CYAN}🌐 Fetching fresh Telegram proxies...${NC}"
-    proxies=$(curl -s https://raw.githubusercontent.com/officialputuid/KangProxies/main/tg.txt | head -n 10)
-    if [[ -z "$proxies" ]]; then
-        echo -e "${RED}✘ Failed to fetch proxies.${NC}"
-    else
-        echo -e "${GREEN}✔ Proxies:${NC}"
-        echo "$proxies"
-    fi
+  echo -e "${YELLOW}🔧 Installing dependencies...${NC}"
+  pkg update -y >/dev/null
+  pkg install curl wget jq -y >/dev/null
+  if ! command -v wgcf &>/dev/null; then
+    wget -qO wgcf "https://github.com/ViRb3/wgcf/releases/latest/download/wgcf_$(uname -m)"
+    chmod +x wgcf && mv wgcf /data/data/com.termux/files/usr/bin/
+  fi
+  echo -e "${GREEN}✔ Requirements OK${NC}"
 }
 
 scan_warp_ips() {
-    echo -e "${CYAN}🌍 Scanning active WARP IPs...${NC}"
-    count=0
-    for i in {1..500}; do
-        ip="162.159.$((RANDOM % 256)).$((RANDOM % 256))"
-        port=$((RANDOM % 65535 + 1))
-        ping_result=$(ping -c1 -W1 $ip | grep 'time=' | awk -F'time=' '{print $2}' | cut -d' ' -f1)
-        if [[ ! -z "$ping_result" ]]; then
-            echo -e "${GREEN}✔ IP:$ip:$port  ${NC}| Ping: ${ping_result}ms"
-            count=$((count + 1))
-        fi
-        [[ $count -eq 10 ]] && break
-    done
+  echo -e "${CYAN}\n🌍 Scanning active WARP IPv4 IPs...${NC}"
+  count=0
+  while [[ $count -lt 10 ]]; do
+    ip="162.159.$((RANDOM % 256)).$((RANDOM % 256))"
+    port=$((RANDOM % 60000 + 1000))
+    ping_ms=$(ping -c1 -W1 $ip 2>/dev/null | grep time= | awk -F'time=' '{print $2}' | cut -d' ' -f1)
+    if [[ -n "$ping_ms" ]]; then
+      echo -e "${GREEN}✔ $ip:$port  Ping: ${ping_ms}ms${NC}"
+      ((count++))
+    fi
+  done
+}
 
-    [[ $count -eq 0 ]] && echo -e "${RED}✘ No active WARP IPs found.${NC}"
+fetch_proxies() {
+  echo -e "${CYAN}\n🌐 Fetching Telegram proxies...${NC}"
+  proxies=$(curl -s https://raw.githubusercontent.com/ALIILAPRO/MTProtoProxy/main/mtproto.txt | grep '^tg://' | head -n10)
+  if [[ -z "$proxies" ]]; then
+    echo -e "${RED}✘ Failed to fetch proxies.${NC}"
+  else
+    echo -e "${GREEN}✔ Proxies:${NC}"
+    echo "$proxies"
+  fi
 }
 
 generate_wireguard_config() {
-    echo -e "${CYAN}⚙ Generating real WireGuard config (WARP)...${NC}"
-    curl -s -X POST "https://api.cloudflareclient.com/v0a745/reg" \
-        -H "Content-Type: application/json" \
-        --data '{"install_id":"","key":"","tos":"2023-01-01T00:00:00.000Z","fcm_token":""}' > wgdata.json
+  echo -e "${CYAN}\n⚙ Registering & generating WireGuard config via wgcf...${NC}"
+  wgcf register --accept-tos >/dev/null
+  wgcf generate >/dev/null
+  if [[ -f wgcf-profile.conf ]]; then
+    echo -e "${GREEN}✔ Config ready: ${CYAN}wgcf-profile.conf${NC}"
+    echo -e "${YELLOW}⚠ Run 'wgcf trace' after connection to verify warp=on${NC}"
+  else
+    echo -e "${RED}✘ Failed to create profile via wgcf.${NC}"
+  fi
+}
 
-    PRIVATE_KEY=$(jq -r .private_key wgdata.json)
-    PUBLIC_KEY=$(jq -r .peer_public_key wgdata.json)
-    ENDPOINT=$(jq -r .endpoint wgdata.json)
+install_alias() {
+  cp "$0" "$ALIAS_PATH"
+  chmod +x "$ALIAS_PATH"
+  echo -e "${GREEN}✔ Installed! Run with: ${CYAN}Academi_warp${NC}"
+}
 
-    if [[ -z "$PRIVATE_KEY" || -z "$PUBLIC_KEY" || -z "$ENDPOINT" ]]; then
-        echo -e "${RED}✘ Failed to fetch WireGuard config.${NC}"
-        return
-    fi
-
-    cat <<EOF > wgcf.conf
-[Interface]
-PrivateKey = $PRIVATE_KEY
-Address = 172.16.0.2/32
-DNS = 1.1.1.1
-
-[Peer]
-PublicKey = $PUBLIC_KEY
-Endpoint = $ENDPOINT
-AllowedIPs = 0.0.0.0/0, ::/0
-PersistentKeepalive = 25
-EOF
-
-    echo -e "${GREEN}✔ WireGuard config saved to: ${CYAN}wgcf.conf${NC}"
+remove_alias() {
+  rm -f "$ALIAS_PATH"
+  echo -e "${RED}✖ Alias removed.${NC}"
 }
 
 main_menu() {
-    clear
-    echo -e "${CYAN}┌──────────────────────────────────────┐"
-    echo -e "│      ${GREEN}Academi WARP Toolkit v$VERSION${CYAN}     │"
-    echo -e "│  Channel: @Academi_vpn  Support: @MahdiAGMO │"
-    echo -e "└──────────────────────────────────────┘${NC}"
-    echo ""
-    echo "1. 🔍 Scan WARP IPs"
-    echo "2. 🌐 Get Telegram Proxies"
-    echo "3. ⚙ Generate WireGuard Config (WARP)"
-    echo "4. 📥 Install as command (Academi_warp)"
-    echo "5. 🗑 Remove command (Academi_warp)"
-    echo "6. ❌ Exit"
-    echo ""
-    read -p "Select: " choice
-    case $choice in
-        1) scan_warp_ips ;;
-        2) fetch_proxies ;;
-        3) generate_wireguard_config ;;
-        4) install_alias ;;
-        5) remove_alias ;;
-        6) exit 0 ;;
-        *) echo -e "${RED}[!] Invalid choice.${NC}" ;;
-    esac
-    echo ""
-    read -p "Press Enter to return to menu..."
-    main_menu
+  clear
+  echo -e "${CYAN}┌────────────────────────┐"
+  echo -e "│ Academi WARP Toolkit v${VERSION} │"
+  echo -e "└────────────────────────┘${NC}"
+  echo -e "Channel: @Academi_vpn   Support: @MahdiAGM0"
+  echo ""
+  echo "1) Scan WARP IPs"
+  echo "2) Get Telegram Proxies"
+  echo "3) Generate WireGuard Config"
+  echo "4) Install alias 'Academi_warp'"
+  echo "5) Remove alias"
+  echo "0) Exit"
+  echo ""
+  read -p "Select: " choice
+  case "$choice" in
+    1) scan_warp_ips ;;
+    2) fetch_proxies ;;
+    3) generate_wireguard_config ;;
+    4) install_alias ;;
+    5) remove_alias ;;
+    0) exit 0 ;;
+    *) echo -e "${RED}[!] Invalid choice.${NC}" ;;
+  esac
+  echo ""
+  read -p "Press Enter to continue..."
+  main_menu
 }
 
 install_requirements
