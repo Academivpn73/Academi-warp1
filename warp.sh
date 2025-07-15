@@ -1,70 +1,83 @@
 #!/bin/bash
 
-# Colors
-GRN="\e[32m"
-RED="\e[31m"
-YEL="\e[33m"
-NC="\e[0m"
+#──────────────────────────────────────#
+#   Academi VPN - WARP Activator       #
+#   Telegram: @Academi_vpn / Admin: Mahdi  #
+#──────────────────────────────────────#
 
-# Banner
-banner() {
-  clear
-  echo -e "${GRN}╔═══════════════════════════════════════╗"
-  echo -e "║  Telegram: @Academi_vpn  / Admin Support: @MahdiAGM0  ║"
-  echo -e "╚═══════════════════════════════════════╝${NC}"
-}
+# رنگ‌ها
+GREEN='\e[32m'
+BLUE='\e[34m'
+RED='\e[31m'
+RESET='\e[0m'
 
-# WARP IP Scanner
-warp_scanner() {
-  banner
-  echo -e "${YEL}Scanning WARP IPs (max 10)...${NC}"
-  count=0
-  while [ $count -lt 10 ]; do
-    ip=$(curl -4 -s --connect-timeout 3 https://api.ipify.org)
-    port=$(shuf -n 1 -e 80 443 2086 8443 8080)
-    ping_ms=$(ping -c 1 -W 1 "$ip" | grep time= | sed -E 's/.*time=([0-9.]+).*/\1/')
-    nc -z -w1 "$ip" "$port" >/dev/null 2>&1
-    if [[ $? -eq 0 && $ping_ms != "" ]]; then
-      echo -e "${GRN}$ip:$port  Ping: ${ping_ms}ms${NC}"
-      ((count++))
-    fi
-  done
-  echo ""
-  read -p "Press Enter to return to menu..."
-}
+clear
+echo -e "${GREEN}📡 Academi VPN - Auto WARP Setup (WireGuard)"
+echo -e "${BLUE}🔗 Telegram: @Academi_vpn${RESET}\n"
 
-# Telegram Proxy Viewer
-telegram_proxy() {
-  banner
-  echo -e "${YEL}Telegram Proxy List:${NC}"
-  echo ""
-  
-  # 👇 Add your proxies manually here
-  echo -e "${GRN}1. tg://proxy?server=1.1.1.1&port=443&secret=ee00000000000000000000000000000000000000"
-  echo -e "2. tg://proxy?server=2.2.2.2&port=443&secret=ee00000000000000000000000000000000000000${NC}"
-  echo ""
-  echo -e "${YEL}Update this list inside the script manually.${NC}"
-  echo ""
-  read -p "Press Enter to return to menu..."
-}
+# بررسی دسترسی روت (در termux لازم نیست)
+if [[ "$(id -u)" != "0" ]] && [[ "$PREFIX" == "" ]]; then
+  echo -e "${RED}❌ Please run as root.${RESET}"
+  exit 1
+fi
 
-# Menu
-main_menu() {
-  while true; do
-    banner
-    echo -e "${GRN}Select an option:${NC}"
-    echo "1) WARP IP Scanner"
-    echo "2) Telegram Proxy List"
-    echo "0) Exit"
-    echo ""
-    read -p "Choice: " choice
-    case $choice in
-      1) warp_scanner ;;
-      2) telegram_proxy ;;
-      0) exit ;;
-      *) echo -e "${RED}Invalid option.${NC}" && sleep 1 ;;
-    esac
-  done
-}
+# نصب ابزارهای مورد نیاز
+echo -e "${BLUE}[*] Installing dependencies...${RESET}"
+pkg update -y && pkg install -y curl wget unzip wireguard-tools resolv-conf
 
-main_menu
+# بررسی معماری دستگاه
+ARCH=$(uname -m)
+WGCF_URL=""
+if [[ $ARCH == "aarch64" ]]; then
+  WGCF_URL="https://github.com/ViRb3/wgcf/releases/download/v2.2.20/wgcf_2.2.20_linux_arm64"
+elif [[ $ARCH == "armv7l" ]]; then
+  WGCF_URL="https://github.com/ViRb3/wgcf/releases/download/v2.2.20/wgcf_2.2.20_linux_arm"
+elif [[ $ARCH == "x86_64" ]]; then
+  WGCF_URL="https://github.com/ViRb3/wgcf/releases/download/v2.2.20/wgcf_2.2.20_linux_amd64"
+else
+  echo -e "${RED}❌ Unsupported architecture: $ARCH${RESET}"
+  exit 1
+fi
+
+# دانلود و نصب wgcf
+echo -e "${BLUE}[*] Downloading wgcf binary...${RESET}"
+wget -q "$WGCF_URL" -O wgcf && chmod +x wgcf
+mv wgcf /data/data/com.termux/files/usr/bin/ 2>/dev/null || mv wgcf /usr/local/bin/
+
+# ثبت حساب Cloudflare
+echo -e "${BLUE}[*] Registering WARP account...${RESET}"
+wgcf delete >/dev/null 2>&1
+wgcf register --accept-tos >/dev/null 2>&1
+if [[ $? -ne 0 ]]; then
+  echo -e "${RED}❌ Failed to register with Cloudflare.${RESET}"
+  exit 1
+fi
+
+# ساخت فایل کانفیگ
+echo -e "${BLUE}[*] Generating WireGuard config...${RESET}"
+wgcf generate >/dev/null 2>&1
+mkdir -p ~/academi-warp
+mv wgcf-profile.conf ~/academi-warp/wgcf.conf
+CONFIG=~/academi-warp/wgcf.conf
+
+# تنظیم DNS
+echo -e "nameserver 1.1.1.1" > $PREFIX/etc/resolv.conf
+
+# فعال‌سازی WARP
+echo -e "${BLUE}[*] Starting WARP...${RESET}"
+wg-quick down wgcf >/dev/null 2>&1
+wg-quick up $CONFIG >/dev/null 2>&1
+
+if [[ $? -eq 0 ]]; then
+  echo -e "${GREEN}\n✅ WARP is now active!${RESET}"
+else
+  echo -e "${RED}\n❌ Failed to activate WARP.${RESET}"
+  exit 1
+fi
+
+# تست نهایی اتصال
+echo -e "${BLUE}\n🌐 Checking WARP status...${RESET}"
+curl -s https://www.cloudflare.com/cdn-cgi/trace | grep -E 'ip=|warp='
+
+# پایان
+echo -e "\n${GREEN}🎉 Done! Your connection is now routed through WARP.${RESET}"
