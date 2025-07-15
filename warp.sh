@@ -1,104 +1,46 @@
-#!/data/data/com.termux/files/usr/bin/bash
+#!/bin/bash
 
-# ════ Academi WARP Toolkit v1.1.0 ════
-VERSION="1.1.0"
-CHANNEL="@Academi_vpn"
-ADMIN="@MahdiAGM0"
+────────────────[ Metadata ]────────────────
 
-GREEN="\e[32m"; RED="\e[31m"; CYAN="\e[36m"; YELLOW="\e[33m"; NC="\e[0m"
+VERSION="1.0.0" CHANNEL_ID="@Academi_vpn" ADMIN_ID="@MahdiAGM0"
 
-install_dependencies() {
-  echo -e "${YELLOW}🔧 در حال نصب ابزارهای مورد نیاز...${NC}"
-  pkg update -y >/dev/null 2>&1
-  pkg install -y curl jq wireguard >/dev/null 2>&1
-  if ! command -v wgcf &>/dev/null; then
-    wget -qO wgcf "https://github.com/ViRb3/wgcf/releases/latest/download/wgcf_$(uname -m | sed 's/aarch64/arm64/;s/armv7l/armv6l/')"
-    chmod +x wgcf
-    mv wgcf /data/data/com.termux/files/usr/bin/
-  fi
-}
+────────────────[ Colors ]────────────────
 
-telegram_proxy_fetcher() {
-  echo -e "${CYAN}\n🌐 در حال بارگذاری پروکسی‌های تلگرام...${NC}"
-  sources=(
-    "https://raw.githubusercontent.com/hookzof/socks5_list/master/tg/mtproto.txt"
-    "https://raw.githubusercontent.com/TheSpeedX/TBomb/master/core/proxies/mtproto.txt"
-  )
-  for url in "${sources[@]}"; do
-    proxies=$(curl -s --max-time 5 "$url" | grep '^tg://' | head -n 10)
-    if [[ -n "$proxies" ]]; then
-      echo -e "${GREEN}✔ پروکسی‌های سالم از $url:${NC}"
-      echo "$proxies" | nl -w2 -s'. '
-      return
-    fi
-  done
-  echo -e "${RED}❌ پروکسی‌ی سالمی یافت نشد.${NC}"
-}
+RED='\033[0;31m' GREEN='\033[0;32m' YELLOW='\033[1;33m' BLUE='\033[1;34m' NC='\033[0m'
 
-warp_scanner() {
-  echo -e "${CYAN}\n🔍 اسکن IPهای واقعی WARP IPv4...${NC}"
-  cidr_blocks=("162.159.192.0/24" "162.159.193.0/24" "162.159.195.0/24" "188.114.96.0/24" "188.114.97.0/24")
-  found=0
-  while [[ $found -lt 10 ]]; do
-    block=${cidr_blocks[$RANDOM % ${#cidr_blocks[@]}]}
-    base=$(echo "$block" | cut -d'/' -f1 | cut -d'.' -f1-3)
-    for i in $(shuf -i 1-254 -n 15); do
-      ip="${base}.${i}"
-      port=$(( (RANDOM % 65535) + 1 ))
-      ping_ms=$(ping -c1 -W1 "$ip" 2>/dev/null | grep 'time=' | awk -F'time=' '{print $2}' | cut -d' ' -f1)
-      if [[ -n "$ping_ms" ]]; then
-        echo -e "${GREEN}✔ $ip:$port  Ping: ${ping_ms}ms${NC}"
-        ((found++))
-        break
-      fi
-    done
-  done
-}
+────────────────[ Install Dependencies ]────────────────
 
-generate_wireguard_config() {
-  echo -e "${CYAN}\n🛠 در حال ساخت کانفیگ WireGuard واقعی...${NC}"
-  mkdir -p "$HOME/wg_academi"
-  cd "$HOME/wg_academi" || return
-  wgcf register --accept-tos >/dev/null 2>&1
-  wgcf generate >/dev/null 2>&1
-  if [[ -f wgcf-profile.conf ]]; then
-    echo -e "${GREEN}✔ کانفیگ ساخته‌شد در:${NC} $HOME/wg_academi/wgcf-profile.conf"
-    echo -e "\n----- نمایشی از کانفیگ (۲۰ خط اول) -----\n"
-    head -n 20 wgcf-profile.conf
-  else
-    echo -e "${RED}❌ ساخت کانفیگ ناموفق بود.${NC}"
-  fi
-}
+install_deps() { echo -e "${YELLOW}[*] Installing dependencies...${NC}" pkg update -y >/dev/null 2>&1 || apt update -y >/dev/null 2>&1 pkg install -y curl wget jq bash coreutils > /dev/null 2>&1 || apt install -y curl wget jq bash coreutils > /dev/null 2>&1 echo -e "${GREEN}[+] All dependencies installed.${NC}" }
 
-installer_setup() {
-  chmod +x "$0"
-  cp "$0" /data/data/com.termux/files/usr/bin/Academi_warp 2>/dev/null
-  echo -e "${GREEN}✔ دستور Academi_warp نصب شد. حالا فقط تایپ کن:${NC} Academi_warp"
-}
+────────────────[ Ping Check ]────────────────
 
-main_menu() {
-  clear
-  echo -e "${YELLOW}Academi WARP Toolkit v${VERSION}${NC}"
-  echo -e "${CYAN}Channel:${NC} ${CHANNEL}   ${CYAN}Support:${NC} ${ADMIN}"
-  echo ""
-  echo -e "${CYAN}1) WARP IPv4 Scanner"
-  echo -e "2) Telegram Proxy List"
-  echo -e "3) Generate Real WireGuard Config"
-  echo -e "0) Exit"
-  echo -en "\n${YELLOW}>>> ${NC}"
-  read choice
-  case "$choice" in
-    1) warp_scanner ;;
-    2) telegram_proxy_fetcher ;;
-    3) generate_wireguard_config ;;
-    0) exit 0 ;;
-    *) echo -e "${RED}❌ انتخاب نامعتبر!${NC}"; sleep 1 ;;
-  esac
-  echo -e "\n${CYAN}Press Enter to return to menu...${NC}"
-  read
-  main_menu
-}
+check_ping() { local ip=$1 ping_result=$(ping -c 1 -W 1 "$ip" 2>/dev/null | grep 'time=' | awk -F'time=' '{print $2}' | awk '{print $1}') echo "$ping_result" }
 
-install_dependencies
-installer_setup
-main_menu
+────────────────[ Country IP Ranges (WARP)]────────────────
+
+get_ip_ranges() { case $1 in "Germany") echo "162.159.192.0/24";; "France") echo "162.159.44.0/24";; "Iran") echo "188.114.96.0/24";; "Sweden") echo "172.64.0.0/24";; "USA") echo "104.28.0.0/24";; "UK") echo "198.41.192.0/24";; esac }
+
+────────────────[ Generate Random Ports ]────────────────
+
+random_port() { echo $(( ( RANDOM % 9000 )  + 1000 )) }
+
+────────────────[ WARP IP Scanner ]────────────────
+
+warp_ip_scanner() { echo -e "\n${BLUE}==> Select Country:${NC}" options=("Germany" "France" "Iran" "Sweden" "USA" "UK") select country in "${options[@]}"; do [[ -n "$country" ]] && break done echo -e "\n${YELLOW}Scanning WARP IPs for $country...${NC}" ip_range=$(get_ip_ranges "$country") count=0 for i in $(seq 1 255); do ip=$(echo $ip_range | sed "s|0/24|$i|") port=$(random_port) ping_ms=$(check_ping "$ip") if [[ -n "$ping_ms" ]]; then flag=$(echo "$country" | awk '{ print tolower($0) }') emoji="🇫🇷" case $country in Germany) emoji="🇩🇪";; France) emoji="🇫🇷";; Iran) emoji="🇮🇷";; Sweden) emoji="🇸🇪";; USA) emoji="🇺🇸";; UK) emoji="🇬🇧";; esac echo -e "${GREEN}$ip:$port  | $emoji $country | Ping: ${ping_ms}ms${NC}" ((count++)) fi [[ $count -ge 10 ]] && break done [[ $count -eq 0 ]] && echo -e "${RED}❌ No working IPs found.${NC}" }
+
+────────────────[ Telegram Proxy Scraper ]────────────────
+
+proxy_fetch() { echo -e "${YELLOW}[*] Fetching fresh Telegram proxies...${NC}" proxies=$(curl -s https://raw.githubusercontent.com/hookzof/socks5_list/master/tg.txt | head -n 10) if [[ -z "$proxies" ]]; then echo -e "${RED}❌ Failed to fetch proxies.${NC}" else echo -e "${GREEN}[+] Showing 10 Telegram proxies:${NC}\n" echo "$proxies" fi }
+
+────────────────[ Main Menu ]────────────────
+
+main_menu() { clear echo -e "${BLUE}Academi WARP Utility  |  Version: ${VERSION}${NC}" echo -e "${GREEN}Channel: ${CHANNEL_ID}   |   Admin: ${ADMIN_ID}${NC}\n" echo -e "${YELLOW}Choose an option:${NC}" echo "1) 📡 WARP IP Scanner" echo "2) 🔐 Telegram Proxy" echo "3) 🚪 Exit" read -p $'\n>> ' choice case $choice in 1) warp_ip_scanner;; 2) proxy_fetch;; 3) exit;; *) echo "Invalid option"; sleep 1; main_menu;; esac echo -e "\n${BLUE}Returning to menu in 5 seconds...${NC}" sleep 5 main_menu }
+
+────────────────[ Auto Installer Setup ]────────────────
+
+installer_setup() { echo -e "${YELLOW}[*] Creating alias 'Academi_warp'...${NC}" curl -s -o /data/data/com.termux/files/usr/bin/Academi_warp https://raw.githubusercontent.com/Academivpn73/Academi-warp1/main/warp.sh chmod +x /data/data/com.termux/files/usr/bin/Academi_warp echo -e "${GREEN}[+] You can now use 'Academi_warp' anywhere in Termux!${NC}" }
+
+────────────────[ Script Entry Point ]────────────────
+
+install_deps main_menu
+
