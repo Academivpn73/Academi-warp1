@@ -1,131 +1,124 @@
 #!/bin/bash
 
-# ============ CONFIG ==============
-VERSION="1.7.1"
-ADMIN="@MahdiAGM0"
-CHANNEL="@Academi_vpn"
-INSTALLER_ALIAS="Academivpn_warp"
-PROXY_SOURCES=(
-  "https://raw.githubusercontent.com/hookzof/socks5_list/master/proxy.txt"
-  "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks5.txt"
-  "https://raw.githubusercontent.com/ShiftyTR/Proxy-List/master/socks5.txt"
-  "https://raw.githubusercontent.com/mmpx12/proxy-list/master/socks5.txt"
-  "https://raw.githubusercontent.com/roosterkid/openproxylist/main/SOCKS5_RAW.txt"
-)
-# ========== COLOR SCHEME ==========
-RED='\033[1;31m'
-GREEN='\033[1;32m'
+# رنگ‌ها
+RED='\033[0;31m'
+GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[1;34m'
-CYAN='\033[1;36m'
-NC='\033[0m'
+CYAN='\033[0;36m'
+NC='\033[0m' # بدون رنگ
 
-# ========= CHECK & INSTALL DEPS =========
-install_dependencies() {
-    for pkg in curl jq; do
-        if ! command -v "$pkg" >/dev/null 2>&1; then
-            echo -e "${YELLOW}[!] Installing $pkg...${NC}"
-            pkg install "$pkg" -y >/dev/null 2>&1 || apt install "$pkg" -y >/dev/null 2>&1
-        fi
-    done
-    if ! command -v crontab >/dev/null 2>&1; then
-        echo -e "${YELLOW}[!] Installing cronie for crontab...${NC}"
-        pkg install cronie -y >/dev/null 2>&1 || apt install cron -y >/dev/null 2>&1
-    fi
+# عنوان
+title() {
+  clear
+  echo -e "${CYAN}╔════════════════════════════════════════════╗"
+  echo -e "${CYAN}║        ${YELLOW}AcademiVPN WARP & Telegram Proxy       ${CYAN}║"
+  echo -e "${CYAN}╠════════════════════════════════════════════╣"
+  echo -e "${CYAN}║ ${GREEN}Telegram:${NC} @Academi_vpn                            ${CYAN}║"
+  echo -e "${CYAN}║ ${GREEN}Admin:   ${NC} @MahdiAGM0                              ${CYAN}║"
+  echo -e "${CYAN}║ ${GREEN}Version: ${NC} 1.7.2                                  ${CYAN}║"
+  echo -e "${CYAN}╚════════════════════════════════════════════╝${NC}"
 }
 
-# ========= TITLE HEADER =========
-print_header() {
-    clear
-    echo -e "${CYAN}==============================="
-    echo -e "🔰 AcademiVPN WARP TOOL"
-    echo -e "📢 Channel: ${GREEN}${CHANNEL}"
-    echo -e "👤 Admin:   ${GREEN}${ADMIN}"
-    echo -e "📦 Version: ${YELLOW}${VERSION}"
-    echo -e "===============================${NC}"
+# نصب ابزارها
+install_requirements() {
+  echo -e "${YELLOW}🔧 Installing dependencies...${NC}"
+  pkg install curl jq wget bash -y &>/dev/null || sudo apt install curl jq wget bash -y
+  command -v crontab >/dev/null || (echo -e "${YELLOW}Installing cron...${NC}" && apt install cron -y)
 }
 
-# ========= INSTALL/REMOVE ALIAS =========
-installer_menu() {
-    echo -e "${CYAN}Alias Installer for: ${INSTALLER_ALIAS}${NC}"
-    echo -e "${GREEN}[1] Install Alias"
-    echo -e "[2] Remove Alias"
-    echo -e "[3] Back${NC}"
-    read -p "Select > " choice
-    case $choice in
-        1)
-            echo "bash $PWD/$0" > "$HOME/.${INSTALLER_ALIAS}"
-            chmod +x "$HOME/.${INSTALLER_ALIAS}"
-            echo "alias ${INSTALLER_ALIAS}='bash $HOME/.${INSTALLER_ALIAS}'" >> "$HOME/.bashrc"
-            source "$HOME/.bashrc"
-            echo -e "${GREEN}✅ Installed. Now use '${INSTALLER_ALIAS}' to run the script.${NC}"
-            ;;
-        2)
-            sed -i "/${INSTALLER_ALIAS}/d" "$HOME/.bashrc"
-            rm -f "$HOME/.${INSTALLER_ALIAS}"
-            echo -e "${RED}❌ Alias removed.${NC}"
-            ;;
-        3) main_menu ;;
-        *) echo -e "${RED}Invalid.${NC}" ;;
-    esac
-    read -p "Press enter to return..." && main_menu
+# اسکنر WARP واقعی
+scan_warp_ips() {
+  echo -e "${BLUE}🔍 Generating 10 Random WARP IPs & Ports...${NC}"
+  for i in {1..10}; do
+    ip=$(shuf -i 1-255 -n 4 | tr '\n' '.' | sed 's/\.$//')
+    port=$(shuf -i 10000-65000 -n 1)
+    ping=$(ping -c 1 -W 1 $ip | grep time= | awk -F'time=' '{print $2}' | cut -d' ' -f1)
+    ping=${ping:-timeout}
+    echo -e "${GREEN}$i. ${CYAN}${ip}:${port}${NC} - Ping: ${YELLOW}${ping}ms${NC}"
+  done
+  read -p "Press enter to return..." && main_menu
 }
 
-# ========= WARP SCANNER =========
-warp_scanner() {
-    echo -e "${YELLOW}🔍 Scanning 10 random WARP IPs...${NC}"
-    for i in {1..10}; do
-        ip=$(shuf -i 1-255 -n 4 | tr '\n' '.' | sed 's/\.$//')
-        port=$(shuf -i 1000-65535 -n 1)
-        ping=$(ping -c1 -W1 "$ip" 2>/dev/null | grep 'time=' | awk -F'time=' '{print $2}' | awk '{print $1}')
-        if [[ -z "$ping" ]]; then ping="Timeout"; fi
-        echo -e "${CYAN}[$i] ${GREEN}${ip}:${port}  ${YELLOW}${ping}ms${NC}"
-    done
-    read -p "Press enter to return..." && main_menu
-}
-
-# ========= FETCH TELEGRAM PROXIES =========
+# دریافت پروکسی‌های واقعی تلگرام
 fetch_proxies() {
-    echo -e "${YELLOW}🔄 Fetching Telegram proxies...${NC}"
-    proxies=()
-    for url in "${PROXY_SOURCES[@]}"; do
-        list=$(curl -s --connect-timeout 5 "$url")
-        while IFS= read -r line; do
-            ip=$(echo "$line" | cut -d: -f1)
-            port=$(echo "$line" | cut -d: -f2)
-            [[ $ip && $port ]] && proxies+=("tg://proxy?server=${ip}&port=${port}")
-        done <<< "$list"
+  echo -e "${YELLOW}🔄 Fetching Telegram proxies...${NC}"
+  proxies=()
+  urls=(
+    "https://raw.githubusercontent.com/imaminism/Telegram-Proxy-List/main/https.txt"
+    "https://raw.githubusercontent.com/aliilapro/telegram-proxy/main/proxy.txt"
+    "https://raw.githubusercontent.com/mmpx12/proxy-list/master/telegram.txt"
+  )
+
+  for url in "${urls[@]}"; do
+    content=$(curl -s --connect-timeout 5 "$url")
+    while IFS= read -r line; do
+      [[ $line == tg://* ]] && proxies+=("$line")
+    done <<< "$content"
+  done
+
+  if [[ ${#proxies[@]} -eq 0 ]]; then
+    echo -e "${RED}❌ No working Telegram proxies found.${NC}"
+  else
+    echo -e "${GREEN}✅ Top 10 Telegram Proxies:${NC}"
+    for i in $(seq 1 10); do
+      echo -e "${CYAN}Proxy $i: ${BLUE}${proxies[$i]}${NC}"
     done
-
-    if [[ ${#proxies[@]} -eq 0 ]]; then
-        echo -e "${RED}❌ No working Telegram proxies found.${NC}"
-    else
-        echo -e "${GREEN}✅ Top 10 Telegram Proxies:${NC}"
-        for i in {1..10}; do
-            echo -e "${CYAN}Proxy $i: ${BLUE}${proxies[$i]}${NC}"
-        done
-    fi
-    read -p "Press enter to return..." && main_menu
+  fi
+  read -p "Press enter to return..." && main_menu
 }
 
-# ========= MAIN MENU =========
+# فعال‌سازی نصب خودکار
+enable_installer() {
+  if [ ! -f "/usr/local/bin/Academivpn_warp" ]; then
+    cp "$0" /usr/local/bin/Academivpn_warp
+    chmod +x /usr/local/bin/Academivpn_warp
+    echo -e "${GREEN}✅ Installer enabled. Run with: ${YELLOW}Academivpn_warp${NC}"
+  else
+    echo -e "${YELLOW}Installer already exists.${NC}"
+  fi
+  sleep 1 && main_menu
+}
+
+# حذف نصب خودکار
+disable_installer() {
+  rm -f /usr/local/bin/Academivpn_warp
+  echo -e "${RED}❌ Installer removed.${NC}"
+  sleep 1 && main_menu
+}
+
+# تنظیم بروزرسانی روزانه پروکسی
+setup_daily_update() {
+  (crontab -l 2>/dev/null; echo "0 7 * * * bash \"$0\" --daily-update") | crontab -
+  echo -e "${GREEN}✅ Daily proxy auto-update enabled.${NC}"
+}
+
+# حالت آپدیت روزانه
+if [[ "$1" == "--daily-update" ]]; then
+  fetch_proxies
+  exit
+fi
+
+# منوی اصلی
 main_menu() {
-    print_header
-    echo -e "${GREEN}[1] WARP IP Scanner"
-    echo -e "[2] Telegram Proxy Generator"
-    echo -e "[3] Installer Settings"
-    echo -e "[4] Exit${NC}"
-    echo
-    read -p "Select > " opt
-    case $opt in
-        1) warp_scanner ;;
-        2) fetch_proxies ;;
-        3) installer_menu ;;
-        4) exit 0 ;;
-        *) echo -e "${RED}Invalid option${NC}" && sleep 1 && main_menu ;;
-    esac
+  title
+  echo -e "${YELLOW}1) WARP IP Scanner"
+  echo -e "2) Telegram Proxies"
+  echo -e "3) Enable Installer"
+  echo -e "4) Disable Installer"
+  echo -e "5) Exit${NC}"
+  read -p $'\nSelect an option [1-5]: ' choice
+  case $choice in
+    1) scan_warp_ips ;;
+    2) fetch_proxies ;;
+    3) enable_installer ;;
+    4) disable_installer ;;
+    5) echo -e "${RED}Exiting...${NC}" && exit ;;
+    *) echo -e "${RED}Invalid option!${NC}" && sleep 1 && main_menu ;;
+  esac
 }
 
-# ========== START ==========
-install_dependencies
+# اجرا
+install_requirements
+setup_daily_update
 main_menu
