@@ -1,83 +1,85 @@
-import os
-import time
-import requests
-import random
-from colorama import Fore, Style, init
+#!/bin/bash
 
-init(autoreset=True)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#     Academi VPN Script v1.0.3
+#     Telegram: @Academi_vpn
+#     Support: @MahdiAGM0
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-VERSION = "1.0.2"
-CHANNEL = "Telegram: @Academi_vpn"
-SUPPORT = "Support: @MahdiAGM0"
+RED=$(tput setaf 1)
+GREEN=$(tput setaf 2)
+CYAN=$(tput setaf 6)
+YELLOW=$(tput setaf 3)
+RESET=$(tput sgr0)
 
-def title():
-    os.system("clear")
-    print(Fore.CYAN + "═" * 50)
-    print(Fore.GREEN + f"     Academi VPN Script  |  Version {VERSION}")
-    print(Fore.YELLOW + f"     {CHANNEL}")
-    print(Fore.MAGENTA + f"     {SUPPORT}")
-    print(Fore.CYAN + "═" * 50)
-    print()
+function header() {
+  clear
+  echo "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "${GREEN}      Academi VPN Script - Version 1.0.0"
+  echo "${YELLOW}      Telegram: @Academi_vpn"
+  echo "${YELLOW}      Support: @MahdiAGM0"
+  echo "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+  echo
+}
 
-def menu():
-    print(Fore.BLUE + "[1] WARP IP Scanner (IPv4 only)")
-    print(Fore.BLUE + "[2] Telegram Proxy Fetcher (auto-updated)")
-    print(Fore.RED + "[0] Exit")
-    print()
+function install_requirements() {
+  echo "${CYAN}Installing required packages...${RESET}"
+  pkg install curl jq -y > /dev/null 2>&1
+}
 
-def scan_warp_ips():
-    print(Fore.CYAN + "\nScanning best WARP IPv4 IPs...\n")
-    working_ips = []
+function menu() {
+  echo "${GREEN}[1]${RESET} WARP IP Scanner (IPv4)"
+  echo "${GREEN}[2]${RESET} Telegram Proxy List"
+  echo "${GREEN}[0]${RESET} Exit"
+  echo
+  read -rp "${CYAN}Choose an option: ${RESET}" opt
+  case "$opt" in
+    1) warp_scanner ;;
+    2) telegram_proxies ;;
+    0) echo "${YELLOW}Exiting.${RESET}"; exit 0 ;;
+    *) echo "${RED}Invalid choice.${RESET}"; sleep 1; main ;;
+  esac
+}
 
-    for _ in range(50):  # افزایش تلاش برای پیدا کردن 10 ایپی
-        ip = f"162.159.{random.randint(0,255)}.{random.randint(1,254)}"
-        port = random.choice([80, 443, 8080, 2053, 2083, 2087, 2096, 8443])
-        try:
-            start = time.time()
-            response = os.system(f"ping -c 1 -W 1 {ip} > /dev/null")
-            delay = round((time.time() - start)*1000, 2)
-            if response == 0:
-                print(f"{Fore.GREEN}{ip}:{port}  {Fore.WHITE}Ping: {delay}ms")
-                working_ips.append(f"{ip}:{port}  Ping: {delay}ms")
-            if len(working_ips) >= 10:
-                break
-        except:
-            continue
-    if not working_ips:
-        print(Fore.RED + "❌ No working IPv4 IPs found.\n")
-    else:
-        print(Fore.GREEN + f"\n✔ Found {len(working_ips)} working IPs.\n")
+function warp_scanner() {
+  echo
+  echo "${CYAN}Scanning best WARP IPv4 IPs...${RESET}"
+  found=0
+  for i in {1..100}; do
+    IP="162.159.$((RANDOM % 256)).$((RANDOM % 256))"
+    PORT=$(shuf -n 1 -e 80 443 8080 8443 2053 2083 2087 2096)
+    ping_time=$(ping -c1 -W1 $IP | grep 'time=' | sed -E 's/.*time=([0-9.]+) ms/\1/')
+    if [[ ! -z "$ping_time" ]]; then
+      echo "${GREEN}$IP:$PORT${RESET}  Ping: ${YELLOW}${ping_time}ms${RESET}"
+      ((found++))
+    fi
+    [[ $found -ge 10 ]] && break
+  done
+  [[ $found -eq 0 ]] && echo "${RED}❌ No working IPs found.${RESET}"
+  echo
+  read -p "Press Enter to return..."
+}
 
-    input(Fore.YELLOW + "\nPress Enter to return to menu...")
+function telegram_proxies() {
+  echo
+  echo "${CYAN}Fetching Telegram proxies...${RESET}"
+  proxies=$(curl -s "https://api.openproxylist.xyz/tg" | jq -r '.[] | "tg://proxy?server=\(.host)&port=\(.port)&secret=\(.secret)"' | head -n 10)
+  if [[ -z "$proxies" ]]; then
+    echo "${RED}No proxies found.${RESET}"
+  else
+    echo "${GREEN}$proxies${RESET}"
+  fi
+  echo
+  read -p "Press Enter to return..."
+}
 
-def fetch_telegram_proxies():
-    print(Fore.CYAN + "\nFetching free Telegram proxies...\n")
-    try:
-        res = requests.get("https://api.openproxy.space/tg", timeout=10)
-        data = res.json()
-        proxies = data.get("proxies", [])[:10]  # دریافت 10 عدد اول
-        if not proxies:
-            print(Fore.RED + "No proxies found.")
-        for i, p in enumerate(proxies, 1):
-            print(Fore.GREEN + f"[{i}] tg://proxy?server={p['host']}&port={p['port']}&secret={p['secret']}")
-    except Exception as e:
-        print(Fore.RED + "Error fetching proxies:", e)
+function main() {
+  header
+  install_requirements
+  while true; do
+    header
+    menu
+  done
+}
 
-    input(Fore.YELLOW + "\nPress Enter to return to menu...")
-
-# اجرای اسکریپت
-while True:
-    title()
-    menu()
-    choice = input(Fore.CYAN + "\nSelect an option: ")
-
-    if choice == "1":
-        scan_warp_ips()
-    elif choice == "2":
-        fetch_telegram_proxies()
-    elif choice == "0":
-        print(Fore.YELLOW + "Exiting. Goodbye!")
-        break
-    else:
-        print(Fore.RED + "Invalid input!")
-        time.sleep(1)
+main
