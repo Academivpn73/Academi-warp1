@@ -1,98 +1,90 @@
-#!/data/data/com.termux/files/usr/bin/bash
+#!/bin/bash
 
-VERSION="1.3.0"
-ALIAS_PATH="/data/data/com.termux/files/usr/bin/Academi_warp"
+VERSION="1.0.4"
+BIN_PATH="/data/data/com.termux/files/usr/bin/Academivpn_warp"
 
-GREEN="\033[0;32m"; CYAN="\033[0;36m"
-YELLOW="\033[1;33m"; RED="\033[0;31m"; NC="\033[0m"
-
-install_requirements() {
-  echo -e "${YELLOW}🔧 Installing dependencies...${NC}"
-  pkg update -y >/dev/null
-  pkg install curl wget jq -y >/dev/null
-  if ! command -v wgcf &>/dev/null; then
-    wget -qO wgcf "https://github.com/ViRb3/wgcf/releases/latest/download/wgcf_$(uname -m)"
-    chmod +x wgcf && mv wgcf /data/data/com.termux/files/usr/bin/
-  fi
-  echo -e "${GREEN}✔ Requirements OK${NC}"
+# ========== Install Dependencies ==========
+install_dependencies() {
+  echo -e "\nInstalling required packages..."
+  apt update -y > /dev/null 2>&1
+  apt install -y curl wget jq netcat unzip > /dev/null 2>&1
 }
 
-scan_warp_ips() {
-  echo -e "${CYAN}\n🌍 Scanning active WARP IPv4 IPs...${NC}"
-  count=0
-  while [[ $count -lt 10 ]]; do
-    ip="162.159.$((RANDOM % 256)).$((RANDOM % 256))"
-    port=$((RANDOM % 60000 + 1000))
-    ping_ms=$(ping -c1 -W1 $ip 2>/dev/null | grep time= | awk -F'time=' '{print $2}' | cut -d' ' -f1)
-    if [[ -n "$ping_ms" ]]; then
-      echo -e "${GREEN}✔ $ip:$port  Ping: ${ping_ms}ms${NC}"
-      ((count++))
-    fi
+# ========== WARP Scanner ==========
+warp_scan() {
+  echo -e "\n[+] Scanning best WARP IPv4 IPs..."
+  ips_found=0
+  for i in {1..250}; do
+    ip=$(shuf -n 1 -i 162.159.192.0-162.159.255.255)
+    for port in 80 443 2086 2087 2052 2053 2095 2096 8080 8443; do
+      ping_output=$(ping -c 1 -W 1 $ip | grep 'time=')
+      if [[ $ping_output ]]; then
+        ping_ms=$(echo "$ping_output" | grep -oP 'time=\K[0-9.]+')
+        echo "$ip:$port  Ping: ${ping_ms}ms"
+        ((ips_found++))
+        break
+      fi
+      [[ $ips_found -ge 10 ]] && break 2
+    done
   done
+  [[ $ips_found -eq 0 ]] && echo "[!] No working IPs found."
 }
 
+# ========== Telegram Proxy ==========
 fetch_proxies() {
-  echo -e "${CYAN}\n🌐 Fetching Telegram proxies...${NC}"
-  proxies=$(curl -s https://raw.githubusercontent.com/ALIILAPRO/MTProtoProxy/main/mtproto.txt | grep '^tg://' | head -n10)
+  echo -e "\n[+] Fetching fresh Telegram proxies..."
+  proxies=$(curl -s https://raw.githubusercontent.com/hookzof/socks5_list/master/tg.txt | head -n 10)
   if [[ -z "$proxies" ]]; then
-    echo -e "${RED}✘ Failed to fetch proxies.${NC}"
+    echo "[!] Failed to fetch proxies."
   else
-    echo -e "${GREEN}✔ Proxies:${NC}"
+    echo "[✔] Found Proxies:"
     echo "$proxies"
   fi
 }
 
-generate_wireguard_config() {
-  echo -e "${CYAN}\n⚙ Registering & generating WireGuard config via wgcf...${NC}"
-  wgcf register --accept-tos >/dev/null
-  wgcf generate >/dev/null
-  if [[ -f wgcf-profile.conf ]]; then
-    echo -e "${GREEN}✔ Config ready: ${CYAN}wgcf-profile.conf${NC}"
-    echo -e "${YELLOW}⚠ Run 'wgcf trace' after connection to verify warp=on${NC}"
+# ========== Installer ==========
+install_launcher() {
+  echo -e "\n[+] Installing launcher as 'Academivpn_warp'..."
+  echo "bash $(realpath "$0")" > "$BIN_PATH"
+  chmod +x "$BIN_PATH"
+  echo "[✔] Installed. You can now run: Academivpn_warp"
+}
+
+uninstall_launcher() {
+  if [[ -f "$BIN_PATH" ]]; then
+    rm "$BIN_PATH"
+    echo "[✔] Launcher removed."
   else
-    echo -e "${RED}✘ Failed to create profile via wgcf.${NC}"
+    echo "[!] Launcher not found."
   fi
 }
 
-install_alias() {
-  cp "$0" "$ALIAS_PATH"
-  chmod +x "$ALIAS_PATH"
-  echo -e "${GREEN}✔ Installed! Run with: ${CYAN}Academi_warp${NC}"
-}
-
-remove_alias() {
-  rm -f "$ALIAS_PATH"
-  echo -e "${RED}✖ Alias removed.${NC}"
-}
-
+# ========== Main Menu ==========
 main_menu() {
-  clear
-  echo -e "${CYAN}┌────────────────────────┐"
-  echo -e "│ Academi WARP Toolkit v${VERSION} │"
-  echo -e "└────────────────────────┘${NC}"
-  echo -e "Channel: @Academi_vpn   Support: @MahdiAGM0"
-  echo ""
-  echo "1) Scan WARP IPs"
-  echo "2) Get Telegram Proxies"
-  echo "3) Generate WireGuard Config"
-  echo "4) Install alias 'Academi_warp'"
-  echo "5) Remove alias"
-  echo "0) Exit"
-  echo ""
-  read -p "Select: " choice
-  case "$choice" in
-    1) scan_warp_ips ;;
-    2) fetch_proxies ;;
-    3) generate_wireguard_config ;;
-    4) install_alias ;;
-    5) remove_alias ;;
-    0) exit 0 ;;
-    *) echo -e "${RED}[!] Invalid choice.${NC}" ;;
-  esac
-  echo ""
-  read -p "Press Enter to continue..."
-  main_menu
+  while true; do
+    echo -e "\n=============== Academi VPN Menu ==============="
+    echo "Version: $VERSION"
+    echo "Channel: @Academi_vpn"
+    echo "Admin:   @MahdiAGM0"
+    echo "-----------------------------------------------"
+    echo "1. WARP IP Scanner"
+    echo "2. Telegram Proxy"
+    echo "3. Install Launcher (Academivpn_warp)"
+    echo "4. Uninstall Launcher"
+    echo "5. Exit"
+    echo "-----------------------------------------------"
+    read -p "Select option: " choice
+    case "$choice" in
+      1) warp_scan ;;
+      2) fetch_proxies ;;
+      3) install_launcher ;;
+      4) uninstall_launcher ;;
+      5) echo "Goodbye!"; exit 0 ;;
+      *) echo "[!] Invalid choice." ;;
+    esac
+  done
 }
 
-install_requirements
+# Run
+install_dependencies
 main_menu
