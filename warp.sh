@@ -1,131 +1,83 @@
-#!/bin/bash
+import os
+import time
+import requests
+import random
+from colorama import Fore, Style, init
 
-VERSION="1.1.0"
-CHANNEL_ID="@Academi_vpn"
-SUPPORT_ID="@MahdiAGM0"
+init(autoreset=True)
 
-GREEN="\e[32m"
-RED="\e[31m"
-NC="\e[0m"
+VERSION = "1.0.2"
+CHANNEL = "Telegram: @Academi_vpn"
+SUPPORT = "Support: @MahdiAGM0"
 
-TMP_DIR="warp_tmp"
-PROXY_FILE="telegram_proxies.txt"
+def title():
+    os.system("clear")
+    print(Fore.CYAN + "═" * 50)
+    print(Fore.GREEN + f"     Academi VPN Script  |  Version {VERSION}")
+    print(Fore.YELLOW + f"     {CHANNEL}")
+    print(Fore.MAGENTA + f"     {SUPPORT}")
+    print(Fore.CYAN + "═" * 50)
+    print()
 
-# ------------------------
-# HEADER
-# ------------------------
-print_header() {
-  clear
-  echo -e "${GREEN}╔════════════════════════════════════════╗"
-  echo -e "║      Academi WARP Tool - v$VERSION          ║"
-  echo -e "╠════════════════════════════════════════╣"
-  echo -e "║  Channel : $CHANNEL_ID"
-  echo -e "║  Support : $SUPPORT_ID"
-  echo -e "╚════════════════════════════════════════╝${NC}"
-  echo ""
-}
+def menu():
+    print(Fore.BLUE + "[1] WARP IP Scanner (IPv4 only)")
+    print(Fore.BLUE + "[2] Telegram Proxy Fetcher (auto-updated)")
+    print(Fore.RED + "[0] Exit")
+    print()
 
-# ------------------------
-# INSTALL REQUIREMENTS
-# ------------------------
-install_requirements() {
-  apt update -y &>/dev/null
-  apt install -y curl jq iputils-ping net-tools &>/dev/null
-  mkdir -p $TMP_DIR
-}
+def scan_warp_ips():
+    print(Fore.CYAN + "\nScanning best WARP IPv4 IPs...\n")
+    working_ips = []
 
-# ------------------------
-# DOWNLOAD PROXIES
-# ------------------------
-update_proxies() {
-  curl -s https://raw.githubusercontent.com/hookzof/socks5_list/master/tg.txt -o $PROXY_FILE
-}
+    for _ in range(50):  # افزایش تلاش برای پیدا کردن 10 ایپی
+        ip = f"162.159.{random.randint(0,255)}.{random.randint(1,254)}"
+        port = random.choice([80, 443, 8080, 2053, 2083, 2087, 2096, 8443])
+        try:
+            start = time.time()
+            response = os.system(f"ping -c 1 -W 1 {ip} > /dev/null")
+            delay = round((time.time() - start)*1000, 2)
+            if response == 0:
+                print(f"{Fore.GREEN}{ip}:{port}  {Fore.WHITE}Ping: {delay}ms")
+                working_ips.append(f"{ip}:{port}  Ping: {delay}ms")
+            if len(working_ips) >= 10:
+                break
+        except:
+            continue
+    if not working_ips:
+        print(Fore.RED + "❌ No working IPv4 IPs found.\n")
+    else:
+        print(Fore.GREEN + f"\n✔ Found {len(working_ips)} working IPs.\n")
 
-# ------------------------
-# AUTO UPDATE PROXIES EVERY HOUR
-# ------------------------
-schedule_proxy_update() {
-  (crontab -l 2>/dev/null | grep -v "$PROXY_FILE"; echo "0 * * * * curl -s https://raw.githubusercontent.com/hookzof/socks5_list/master/tg.txt -o $PWD/$PROXY_FILE") | crontab -
-}
+    input(Fore.YELLOW + "\nPress Enter to return to menu...")
 
-# ------------------------
-# SHOW PROXY LIST
-# ------------------------
-proxy_list() {
-  print_header
-  echo -e "🌍 Telegram Proxies (Auto updated):\n"
+def fetch_telegram_proxies():
+    print(Fore.CYAN + "\nFetching free Telegram proxies...\n")
+    try:
+        res = requests.get("https://api.openproxy.space/tg", timeout=10)
+        data = res.json()
+        proxies = data.get("proxies", [])[:10]  # دریافت 10 عدد اول
+        if not proxies:
+            print(Fore.RED + "No proxies found.")
+        for i, p in enumerate(proxies, 1):
+            print(Fore.GREEN + f"[{i}] tg://proxy?server={p['host']}&port={p['port']}&secret={p['secret']}")
+    except Exception as e:
+        print(Fore.RED + "Error fetching proxies:", e)
 
-  if [[ ! -f $PROXY_FILE ]]; then
-    update_proxies
-  fi
+    input(Fore.YELLOW + "\nPress Enter to return to menu...")
 
-  head -n 10 $PROXY_FILE
-  echo
-  read -p "Press Enter to return to menu..."
-}
+# اجرای اسکریپت
+while True:
+    title()
+    menu()
+    choice = input(Fore.CYAN + "\nSelect an option: ")
 
-# ------------------------
-# WARP IP SCANNER (REAL WORKING IPs)
-# ------------------------
-warp_ip_scanner() {
-  print_header
-  echo -e "🔍 Scanning best WARP IPv4 IPs (up to 10)...\n"
-
-  > $TMP_DIR/valid_ips.txt
-  COUNT=0
-
-  for ip in $(shuf -n 200 -i 162.159.192.0-162.159.193.254); do
-    for port in 80 443 2083 8443; do
-      timeout 1 bash -c "</dev/tcp/$ip/$port" &>/dev/null
-      if [[ $? -eq 0 ]]; then
-        ping_ms=$(ping -c1 -W1 $ip | grep time= | awk -F'time=' '{print $2}' | cut -d' ' -f1)
-        if [[ -n "$ping_ms" ]]; then
-          echo "$ip:$port  ${ping_ms}ms" >> $TMP_DIR/valid_ips.txt
-          echo -e "${GREEN}$ip:$port  ${ping_ms}ms${NC}"
-          ((COUNT++))
-          break
-        fi
-      fi
-    done
-    [[ $COUNT -ge 10 ]] && break
-  done
-
-  if [[ $COUNT -eq 0 ]]; then
-    echo -e "${RED}❌ No working IPs found.${NC}"
-  else
-    echo -e "\n✅ Top $COUNT WARP IPs:"
-    cat $TMP_DIR/valid_ips.txt
-  fi
-
-  echo
-  read -p "Press Enter to return to menu..."
-}
-
-# ------------------------
-# MAIN MENU
-# ------------------------
-main_menu() {
-  while true; do
-    print_header
-    echo "1️⃣  WARP IPv4 Scanner"
-    echo "2️⃣  Telegram Proxy List"
-    echo "0️⃣  Exit"
-    echo
-    read -p "Choose an option: " choice
-
-    case $choice in
-      1) warp_ip_scanner ;;
-      2) proxy_list ;;
-      0) echo -e "\n${GREEN}Exiting...${NC}"; exit 0 ;;
-      *) echo -e "${RED}Invalid option.${NC}"; sleep 1 ;;
-    esac
-  done
-}
-
-# ------------------------
-# START
-# ------------------------
-install_requirements
-update_proxies
-schedule_proxy_update
-main_menu
+    if choice == "1":
+        scan_warp_ips()
+    elif choice == "2":
+        fetch_telegram_proxies()
+    elif choice == "0":
+        print(Fore.YELLOW + "Exiting. Goodbye!")
+        break
+    else:
+        print(Fore.RED + "Invalid input!")
+        time.sleep(1)
