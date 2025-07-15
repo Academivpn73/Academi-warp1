@@ -1,51 +1,97 @@
 #!/bin/bash
 
-=======================================================
+VERSION="1.6.1"
+ADMIN="@MahdiAGM0"
+CHANNEL="@Academi_vpn"
 
-✨ Academi VPN Warp Tool - Version 1.6.1
+TITLE="==============================="
+TITLE+="\n  Academi WARP | Telegram Proxy Tool"
+TITLE+="\n  Version: $VERSION"
+TITLE+="\n  Telegram: $CHANNEL"
+TITLE+="\n  Admin: $ADMIN"
+TITLE+="\n===============================\n"
 
-🌐 Telegram: @Academi_vpn
+PROXY_FILE="$HOME/.academi_proxies.txt"
 
-👤 Admin: @MahdiAGM0
-
-=======================================================
-
-VERSION="1.6.1" PROXY_FILE="proxies.txt"
-
-Ensure required tools are installed
-
-dep_install() { for pkg in curl jq ping; do if ! command -v $pkg &>/dev/null; then echo "Installing $pkg..." pkg install -y $pkg || apt install -y $pkg fi done }
-
-dep_install
-
-Fetch Telegram proxies from external API
-
-fetch_proxies() { echo "\n🔄 Fetching fresh Telegram proxies..." URL="https://raw.githubusercontent.com/ejabberd-contrib/proxy-list/main/mtproto.json" PROXIES=$(curl -s "$URL" | jq -r '.[].host + ":" + (.[].port|tostring)' 2>/dev/null) if [[ -z "$PROXIES" ]]; then echo "❌ No valid Telegram proxies found." return 1 fi echo "$PROXIES" > "$PROXY_FILE" echo "✅ Proxies updated successfully." }
-
-Show top 10 proxies with ping
-
-show_proxies() { echo -e "\n🌐 Top 10 Telegram MTProto Proxies with Ping:\n" if [[ ! -s "$PROXY_FILE" ]]; then fetch_proxies || { echo -e "\nPress Enter to return..."; read; return; } fi
-
-COUNT=1
-while IFS= read -r proxy && [[ $COUNT -le 10 ]]; do
-    host=$(echo "$proxy" | cut -d':' -f1)
-    ping_result=$(ping -c 1 -W 1 "$host" 2>/dev/null | grep 'time=' | awk -F'time=' '{print $2}' | cut -d' ' -f1)
-    if [[ -z "$ping_result" ]]; then
-        ping_result="Timeout"
-    else
-        ping_result="${ping_result}ms"
-    fi
-    echo "Proxy $COUNT: $proxy  (Ping: $ping_result)"
-    ((COUNT++))
-done < "$PROXY_FILE"
-echo -e "\nPress Enter to return..."
-read
-
+show_title() {
+    clear
+    echo -e "$TITLE"
 }
 
-Main menu
+fetch_proxies() {
+    echo -e "\nFetching fresh Telegram proxies...\n"
+    URL="https://raw.githubusercontent.com/ejabberd-contrib/proxy-list/main/mtproto.json"
+    PROXIES=$(curl -s "$URL" | jq -r '.[] | "\(.host):\(.port)"' 2>/dev/null)
 
-main_menu() { while true; do clear echo -e "\e[36m============================================\e[0m" echo -e "         🚀 Academi VPN WARP Tool" echo -e "         🔹 Version: $VERSION" echo -e "         🔹 Telegram: @Academi_vpn" echo -e "         🔹 Admin: @MahdiAGM0" echo -e "\e[36m============================================\e[0m" echo -e "\nSelect an option:\n" echo -e "1) Update Proxies" echo -e "2) Show Top 10 Proxies" echo -e "3) Exit" echo -ne "\nYour choice: " read CHOICE case $CHOICE in 1) fetch_proxies && sleep 2;; 2) show_proxies;; 3) echo -e "\nExiting..."; exit 0;; *) echo -e "\nInvalid option. Press Enter..."; read;; esac done }
+    if [[ -z "$PROXIES" ]]; then
+        echo "❌ No valid Telegram proxies found."
+        return 1
+    fi
 
-main_menu
+    echo "$PROXIES" > "$PROXY_FILE"
+    echo "✅ Proxies updated successfully."
+}
 
+show_proxies() {
+    if [[ ! -f "$PROXY_FILE" ]]; then
+        echo "⚠️ No proxies file found. Fetching now..."
+        fetch_proxies
+    fi
+
+    echo -e "\n🌐 Top 10 Telegram MTProto Proxies:\n"
+    COUNTER=1
+    while IFS= read -r proxy && [[ $COUNTER -le 10 ]]; do
+        PING=$(ping -c 1 -W 1 "${proxy%%:*}" | grep 'time=' | awk -F'time=' '{print $2}' | cut -d' ' -f1)
+        [[ -z "$PING" ]] && PING="N/A"
+        echo "Proxy $COUNTER: $proxy  |  Ping: ${PING} ms"
+        ((COUNTER++))
+    done < "$PROXY_FILE"
+    echo ""
+}
+
+generate_warp_ips() {
+    echo -e "\nGenerating 10 random WARP IPs...\n"
+    for i in {1..10}; do
+        IP=$(shuf -i 1-255 -n 4 | paste -sd.)
+        PORT=$((RANDOM % 65535 + 1))
+        echo "$IP:$PORT"
+    done
+    echo ""
+}
+
+setup_cron() {
+    echo -e "\n🕒 Enabling daily auto-update for proxies..."
+    (crontab -l 2>/dev/null; echo "0 */5 * * * bash $0 --auto-update") | crontab -
+    echo "✅ Auto-update scheduled every 5 hours."
+}
+
+handle_input() {
+    while true; do
+        echo -e "\n📋 Choose an option:"
+        echo "1) 🧰 Install Launcher"
+        echo "2) ❌ Remove Launcher"
+        echo "3) 🌐 Show Top 10 Telegram Proxies"
+        echo "4) 💎 Generate 10 WARP IPs"
+        echo "5) 🕒 Enable Daily Proxy Auto-Update"
+        echo "0) 🧱 Exit"
+        echo -n ">> "; read -r choice
+
+        case $choice in
+            1) echo "Launcher installation not implemented yet." ;;
+            2) echo "Launcher removal not implemented yet." ;;
+            3) show_proxies ;;
+            4) generate_warp_ips ;;
+            5) setup_cron ;;
+            0) echo "👋 Goodbye!"; exit 0 ;;
+            *) echo "Invalid option. Try again." ;;
+        esac
+    done
+}
+
+if [[ "$1" == "--auto-update" ]]; then
+    fetch_proxies
+    exit 0
+fi
+
+show_title
+handle_input
