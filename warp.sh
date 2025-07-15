@@ -1,110 +1,83 @@
 #!/bin/bash
 
-# ===================================================
-#  Academi VPN Toolkit
-#  Telegram: @Academi_vpn
-#  Admin: @MahdiAGM0
-# ===================================================
+# ─────────────────────────────────────────────
+# Academi Tools - WARP Scanner & Telegram Proxy
+# Telegram: @Academi_vpn
+# Admin: @MahdiAGM0
+# Version 1.0.0
+# ─────────────────────────────────────────────
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
-
-MAX_IPS=10
-PORTS=(80 443 2086 8443 2052 2087)
-TEMP_IP_FILE=$(mktemp)
-PROXY_CACHE_DIR="$HOME/.academi_proxy_cache"
-TODAY=$(date +%F)
-PROXY_FILE="$PROXY_CACHE_DIR/proxies_$TODAY.txt"
-
-mkdir -p "$PROXY_CACHE_DIR"
-
-# Get IPv4 from WARP interface
-get_warp_ip() {
-  curl -s4 --interface wgcf-warp https://api.ipify.org
+install_dependencies() {
+    echo "🔧 Installing dependencies..."
+    apt update -y &>/dev/null
+    apt install curl wget jq ping -y &>/dev/null
 }
 
-# Test IP for open port and ping
-test_ip() {
-  local IP=$1
-  for PORT in "${PORTS[@]}"; do
-    timeout 1 bash -c "</dev/tcp/$IP/$PORT" &>/dev/null
-    if [ $? -eq 0 ]; then
-      local START=$(date +%s%3N)
-      timeout 1 bash -c "</dev/tcp/$IP/$PORT" &>/dev/null
-      local END=$(date +%s%3N)
-      local PING=$(echo "scale=2; ($END - $START)/1000" | bc)
-      echo "$IP:$PORT  Ping(${PING}ms)"
-      return 0
+main_menu() {
+    clear
+    echo -e "============ Academi Tools ============"
+    echo -e "1. WARP IPv4 IP Scanner"
+    echo -e "2. Telegram Proxy Fetcher"
+    echo -e "0. Exit"
+    echo -e "======================================="
+    read -p "Select an option: " option
+    case $option in
+        1) warp_scanner ;;
+        2) fetch_telegram_proxies ;;
+        0) exit ;;
+        *) echo "❌ Invalid option"; sleep 2; main_menu ;;
+    esac
+}
+
+warp_scanner() {
+    echo -e "\n📡 Scanning best WARP IPv4 IPs..."
+    ports=(80 443 2086 2087 2095 2096)
+    IP_LIST=()
+
+    for i in $(seq 1 50); do
+        ip=$(curl -s --interface warp --connect-timeout 3 https://api64.ipify.org)
+        if [[ $ip =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            for port in "${ports[@]}"; do
+                (echo > /dev/tcp/$ip/$port) >/dev/null 2>&1
+                if [ $? -eq 0 ]; then
+                    ping_result=$(ping -c 1 -W 1 $ip | grep 'time=' | awk -F'time=' '{print $2}' | awk '{print $1}')
+                    if [[ ! -z "$ping_result" ]]; then
+                        IP_LIST+=("$ip:$port  Ping: ${ping_result}ms")
+                        break
+                    fi
+                fi
+            done
+        fi
+        [ ${#IP_LIST[@]} -ge 10 ] && break
+    done
+
+    if [ ${#IP_LIST[@]} -eq 0 ]; then
+        echo "❌ No working IPs found."
+    else
+        echo -e "\n✔ Best WARP IPv4 IPs:"
+        for ip in "${IP_LIST[@]}"; do
+            echo "$ip"
+        done
     fi
-  done
-  return 1
+    echo -e "\n🔁 Returning to menu..."
+    read -p "Press enter to continue..." nothing
+    main_menu
 }
 
-# WARP IPv4 Scanner
-scan_warp_ips() {
-  echo -e "${YELLOW}🔍 Scanning best WARP IPv4 IPs...${NC}"
-  COUNT=0
-  > "$TEMP_IP_FILE"
-  while [ $COUNT -lt $MAX_IPS ]; do
-    IP=$(get_warp_ip)
-    if [[ $IP =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-      if test_ip "$IP" >> "$TEMP_IP_FILE"; then
-        ((COUNT++))
-      fi
-    fi
-    sleep 1
-  done
-  echo -e "${GREEN}\n✅ Found $COUNT working WARP IPs:${NC}"
-  cat "$TEMP_IP_FILE"
-  echo ""
-}
-
-# Fetch and cache proxy list if not already cached today
 fetch_telegram_proxies() {
-  if [[ ! -f "$PROXY_FILE" ]]; then
-    echo -e "${YELLOW}📡 Fetching fresh Telegram MTProto proxies...${NC}"
-    curl -s "https://mtpro.xyz/api/?type=mtproto" | \
-      jq -r '.[] | "\(.host):\(.port) secret:\(.secret) ping:\(.ping)ms country:\(.country)"' \
-      > "$PROXY_FILE"
-  else
-    echo -e "${GREEN}✔ Using cached proxy list for today ($TODAY).${NC}"
-  fi
+    echo -e "\n📡 Fetching Telegram Proxies..."
+    proxies=$(curl -s "https://raw.githubusercontent.com/TelegramProxies/proxy-list/main/proxies.json" | jq -r '.[] | "\(.ip):\(.port)"' | head -n 10)
+    if [ -z "$proxies" ]; then
+        echo "❌ Failed to fetch proxies."
+    else
+        echo -e "\n✔ Telegram Proxies:"
+        echo "$proxies"
+    fi
+    echo -e "\n🔁 Returning to menu..."
+    read -p "Press enter to continue..." nothing
+    main_menu
 }
 
-# Show proxies
-show_telegram_proxies() {
-  fetch_telegram_proxies
-  echo -e "${GREEN}\nTop 10 Telegram MTProto Proxies:${NC}"
-  head -n 10 "$PROXY_FILE" | while IFS= read -r line; do
-    HOST=$(echo "$line" | awk -F':' '{print $1}')
-    PORT=$(echo "$line" | awk -F'[: ]' '{print $2}')
-    SECRET=$(echo "$line" | awk -F'secret:' '{print $2}' | awk '{print $1}')
-    echo "tg://proxy?server=${HOST}&port=${PORT}&secret=${SECRET}"
-  done
-  echo ""
-}
-
-# Main Menu
-while true; do
-  echo -e "${GREEN}"
-  echo "============================"
-  echo "    Academi VPN Toolkit"
-  echo "============================"
-  echo -e "${NC}"
-  echo "1) Warp IPv4 Scanner"
-  echo "2) Telegram Proxy List (auto-updated daily)"
-  echo "0) Exit"
-  echo ""
-  read -p "Choose an option: " OPT
-  case $OPT in
-    1) scan_warp_ips ;;
-    2) show_telegram_proxies ;;
-    0) echo "Goodbye!"; break ;;
-    *) echo -e "${RED}Invalid option. Try again.${NC}" ;;
-  esac
-done
-
-# Cleanup
-rm -f "$TEMP_IP_FILE"
+# Start the script
+install_dependencies
+main_menu
