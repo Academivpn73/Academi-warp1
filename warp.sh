@@ -1,122 +1,104 @@
-#!/bin/bash
+#!/data/data/com.termux/files/usr/bin/bash
 
-# ====[ CONFIG ]====
-VERSION="1.6.6"
+VERSION="1.6.5"
 ADMIN="@MahdiAGM0"
 CHANNEL="@Academi_vpn"
-INSTALLER_NAME="Academivpn_warp"
-INSTALL_PATH="/data/data/com.termux/files/usr/bin/$INSTALLER_NAME"
+INSTALLER="Academivpn_warp"
+INSTALL_PATH="/data/data/com.termux/files/usr/bin/$INSTALLER"
+PROXY_TMP="$HOME/.proxy_list.txt"
 
-# ====[ COLORS ]====
 RED='\e[31m'; GREEN='\e[32m'; CYAN='\e[36m'; NC='\e[0m'
 
-# ====[ TITLE ]====
-show_title() {
-    clear
-    echo -e "${CYAN}"
-    echo "╔══════════════════════════════════════════════╗"
-    echo "║           ACADEMI VPN TOOL ${VERSION}                ║"
-    echo "╠══════════════════════════════════════════════╣"
-    echo -e "║ Telegram: ${CHANNEL}              "
-    echo -e "║ Admin:    ${ADMIN}                      "
-    echo -e "║ Version:  ${VERSION}                             "
-    echo "╚══════════════════════════════════════════════╝"
-    echo -e "${NC}"
+title(){
+  clear
+  echo -e "${CYAN}"
+  echo    "╭──────────────────────────────────────╮"
+  echo -e "│ Academi VPN Tool            v$VERSION │"
+  echo -e "│ Telegram: $CHANNEL"
+  echo -e "│ Admin:    $ADMIN"
+  echo    "╰──────────────────────────────────────╯"
+  echo -e "${NC}"
 }
 
-# ====[ DEPENDENCIES ]====
-install_requirements() {
-    echo -e "${GREEN}Installing dependencies...${NC}"
-    pkg update -y >/dev/null 2>&1
-    pkg install curl jq -y >/dev/null 2>&1
+check_deps(){
+  for cmd in curl jq grep ping; do
+    command -v $cmd &>/dev/null || pkg install -y $cmd &>/dev/null
+  done
 }
 
-# ====[ INSTALLER SETUP ]====
-create_installer() {
-    echo -e "${GREEN}Creating installer command: ${INSTALLER_NAME}${NC}"
-    cat <<EOF > "$INSTALL_PATH"
-#!/bin/bash
-bash "$(realpath "$0")"
-EOF
-    chmod +x "$INSTALL_PATH"
-    echo -e "${GREEN}Done. You can now run the script with: ${INSTALLER_NAME}${NC}"
+create_installer(){
+  echo -e "${GREEN}Created shortcut: $INSTALLER${NC}"
+  echo -e "#!/bin/bash\nbash \"$(realpath "$0")\"" > "$INSTALL_PATH"
+  chmod +x "$INSTALL_PATH"
 }
 
-remove_installer() {
-    if [[ -f "$INSTALL_PATH" ]]; then
-        rm "$INSTALL_PATH"
-        echo -e "${GREEN}Installer removed successfully.${NC}"
-    else
-        echo -e "${RED}Installer is not installed.${NC}"
+remove_installer(){
+  rm -f "$INSTALL_PATH" && echo -e "${GREEN}Removed shortcut.${NC}"
+}
+
+scan_warp(){
+  echo -e "${CYAN}Generating 10 random IP:Port (with ping)...${NC}"
+  count=0
+  while [ $count -lt 10 ]; do
+    ip=$(shuf -i 1-255 -n1).$(shuf -i1-255 -n1).$(shuf -i1-255 -n1).$(shuf -i1-255 -n1)
+    port=$(shuf -i1000-65000 -n1)
+    ping_ms=$(ping -c1 -W1 "$ip" 2>/dev/null|grep time=|awk -F'time=' '{print $2}'|cut -d' ' -f1)
+    if [ -n "$ping_ms" ]; then
+      echo -e "${GREEN}IP: $ip:$port${NC}  Ping: ${ping_ms}ms"
+      ((count++))
     fi
+  done
 }
 
-# ====[ WARP SCANNER ]====
-generate_ips_ports() {
-    for i in {1..10}; do
-        IP=$(shuf -n 1 -i 1-255).$(shuf -n 1 -i 1-255).$(shuf -n 1 -i 1-255).$(shuf -n 1 -i 1-255)
-        PORT=$(shuf -n 1 -i 1024-65535)
-        PING=$(ping -c 1 -W 1 "$IP" 2>/dev/null | grep time= | awk -F'time=' '{print $2}' | awk '{print $1}')
-        PING=${PING:-"timeout"}
-        echo -e "${CYAN}IP:PORT${NC} ${IP}:${PORT}   ${CYAN}Ping:${NC} ${PING} ms"
-    done
+fetch_proxies(){
+  echo -e "${GREEN}Fetching Telegram proxies...${NC}"
+  > "$PROXY_TMP"
+
+  # Source 1: MTPro.XYZ
+  curl -fsSL "https://mtpro.xyz/mtproto" | grep -Eo 'tg://proxy\?server=[^&]+&port=[0-9]+' >> "$PROXY_TMP"
+
+  # Source 2: GitHub raw
+  curl -fsSL "https://raw.githubusercontent.com/hookzof/socks5_list/master/proxy.txt" |
+  grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}:[0-9]{2,5}' |
+  awk -F':' '{print "tg://proxy?server="$1"&port="$2}' >> "$PROXY_TMP"
+
+  # Source 3: Custom (add more if needed)
+  curl -fsSL "https://raw.githubusercontent.com/roosterkid/opml-browse/master/resources/mtproto.txt" |
+  grep -E '^tg://' >> "$PROXY_TMP"
+
+  sort -u "$PROXY_TMP" | grep -E '^tg://proxy\?server=' | head -n10 > "$PROXY_TMP"
 }
 
-# ====[ TELEGRAM PROXIES ]====
-fetch_proxies() {
-    echo -e "${GREEN}🔍 Fetching Telegram proxies...${NC}"
-
-    sources=(
-        "https://raw.githubusercontent.com/TheSpeedX/TG-Proxy-List/main/proxies.txt"
-        "https://raw.githubusercontent.com/soroushmirzaei/Telegram-Proxies/main/proxies.txt"
-        "https://raw.githubusercontent.com/hookzof/socks5_list/master/tg.txt"
-    )
-
-    proxies=()
-    for src in "${sources[@]}"; do
-        res=$(curl -fsSL "$src" | grep -Eo 'tg://proxy\?server=[^&]+&port=[0-9]+' 2>/dev/null)
-        for p in $res; do
-            proxies+=("$p")
-        done
-    done
-
-    if [ ${#proxies[@]} -eq 0 ]; then
-        echo -e "${RED}❌ No working proxies found.${NC}"
-        return
-    fi
-
-    echo -e "${GREEN}✅ Top 10 Telegram Proxies:${NC}"
-    for i in "${!proxies[@]}"; do
-        echo -e "${CYAN}Proxy $((i+1)):${NC} ${proxies[$i]}"
-        [[ $i -ge 9 ]] && break
-    done
+show_proxies(){
+  fetch_proxies
+  if ! [[ -s $PROXY_TMP ]]; then
+    echo -e "${RED}❌ No working Telegram proxies found.${NC}"
+    return
+  fi
+  echo -e "${CYAN}Top 10 Telegram Proxies:${NC}"
+  cat -n "$PROXY_TMP" | while read n p; do
+    echo -e "${CYAN}Proxy $n:${NC} $p"
+  done
 }
 
-# ====[ MAIN MENU ]====
-main_menu() {
-    show_title
-    echo -e "${CYAN}1.${NC} Warp IP Scanner"
-    echo -e "${CYAN}2.${NC} Telegram Proxies"
-    echo -e "${CYAN}3.${NC} Install Installer (${INSTALLER_NAME})"
-    echo -e "${CYAN}4.${NC} Remove Installer"
-    echo -e "${CYAN}5.${NC} Exit"
-    echo
-    read -rp "Choose an option: " choice
-
-    case "$choice" in
-        1) generate_ips_ports ;;
-        2) fetch_proxies ;;
-        3) create_installer ;;
-        4) remove_installer ;;
-        5) exit 0 ;;
-        *) echo -e "${RED}Invalid option!${NC}" ;;
-    esac
-
-    echo
-    read -rp "Press Enter to return to menu..."
-    main_menu
+main_menu(){
+  title
+  echo -e "${CYAN}1) Warp IP Scanner"
+  echo -e "2) Telegram Proxies"
+  echo -e "3) Install shortcut (${INSTALLER})"
+  echo -e "4) Remove shortcut"
+  echo -e "0) Exit${NC}"
+  read -p "Choose: " c
+  case $c in
+    1) scan_warp ;;
+    2) show_proxies ;;
+    3) create_installer ;;
+    4) remove_installer ;;
+    0) exit ;;
+    *) echo -e "${RED}Invalid option.${NC}" ;;
+  esac
+  read -p "Press Enter..." && main_menu
 }
 
-# ====[ INIT ]====
-install_requirements
+check_deps
 main_menu
