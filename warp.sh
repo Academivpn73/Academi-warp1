@@ -1,147 +1,90 @@
 #!/bin/bash
 
-# Academi VPN Tool - Version 1.3.0
-# Channel: @Academi_vpn
-# Admin: @MahdiAGM0
-
-VERSION="1.3.0"
-CHANNEL="@Academi_vpn"
+# ========= Basic Info ========= #
+VERSION="1.2.0"
 ADMIN="@MahdiAGM0"
+CHANNEL="@Academi_vpn"
 
-# Colors
-GREEN="\e[32m"
-YELLOW="\e[33m"
-BLUE="\e[36m"
-NC="\e[0m"
+# ========= Colors ========= #
+GREEN="\e[92m"
+RED="\e[91m"
+CYAN="\e[96m"
+YELLOW="\e[93m"
+RESET="\e[0m"
 
-# Installer name
-INSTALLER_NAME="Academivpn_warp"
-
-# Auto install dependencies
+# ========= Install Dependencies ========= #
 install_dependencies() {
-  echo -e "${YELLOW}[+] Installing required packages...${NC}"
-  apt update -y &>/dev/null
-  apt install -y curl jq netcat grep wget dnsutils &>/dev/null
+    echo -e "${CYAN}Installing required packages...${RESET}"
+    pkg update -y > /dev/null 2>&1
+    pkg install curl jq wget coreutils -y > /dev/null 2>&1
 }
 
-# Show header
+# ========= Show Header ========= #
 show_header() {
-  clear
-  echo -e "${BLUE}"
-  echo "=============================================="
-  echo "          Academi VPN Tool - v$VERSION        "
-  echo "        Telegram Channel: $CHANNEL            "
-  echo "             Admin: $ADMIN                   "
-  echo "=============================================="
-  echo -e "${NC}"
+    clear
+    echo -e "${YELLOW}==============================="
+    echo -e "   AcademiVPN Script v$VERSION"
+    echo -e "   Support: $ADMIN"
+    echo -e "   Channel: $CHANNEL"
+    echo -e "===============================${RESET}"
 }
 
-# WARP Scanner
-warp_scanner() {
-  show_header
-  echo -e "${YELLOW}[+] Scanning best WARP IPv4 IPs...${NC}"
-  sleep 1
-
-  RANGE="162.159.{192..255}.{1..254}"
-  PORTS=(80 443 8080 8443 2052 2082 2086 2095 2087 2096)
-
-  count=0
-  for ip in $(shuf -n 500 -e $(eval echo $RANGE)); do
-    for port in "${PORTS[@]}"; do
-      (timeout 1 bash -c "echo > /dev/tcp/$ip/$port") 2>/dev/null
-      if [ $? -eq 0 ]; then
-        PING=$(ping -c1 -W1 $ip | grep 'time=' | awk -F'time=' '{print $2}' | cut -d' ' -f1)
-        if [[ $PING != "" ]]; then
-          echo -e "${GREEN}IP:$ip:$port  Ping:${PING}ms${NC}"
-          count=$((count + 1))
-        fi
-      fi
-      [[ $count -ge 10 ]] && break 2
-    done
-  done
-
-  if [[ $count -eq 0 ]]; then
-    echo -e "${RED}[!] No working WARP IPs found.${NC}"
-  fi
-
-  echo ""
-  read -p "Press Enter to return to menu..."
-  main_menu
-}
-
-# Telegram Proxy
-telegram_proxy() {
-  show_header
-  echo -e "${YELLOW}[+] Fetching fresh Telegram proxies...${NC}"
-  sleep 1
-
-  URLS=(
-    "https://api.openproxylist.xyz/tg" 
-    "https://raw.githubusercontent.com/hookzof/socks5_list/master/tg.txt"
-  )
-
-  proxies=()
-  for url in "${URLS[@]}"; do
-    resp=$(curl -s "$url")
-    if [[ ! -z "$resp" ]]; then
-      for line in $(echo "$resp"); do
-        [[ $line == *":"* ]] && proxies+=("$line")
-      done
+# ========= Fetch Telegram Proxies ========= #
+fetch_proxies() {
+    echo -e "${CYAN}Fetching fresh Telegram proxies...${RESET}"
+    proxy_list=$(curl -s https://api.openproxylist.xyz/tg | jq -r '.[] | "tg://proxy?server=\(.ip)&port=\(.port)&secret=\(.secret)"' | head -n 10)
+    if [[ -z "$proxy_list" ]]; then
+        echo -e "${RED}❌ Failed to fetch proxies.${RESET}"
+    else
+        echo -e "${GREEN}✅ Proxies Updated:${RESET}"
+        echo "$proxy_list"
     fi
-  done
+}
 
-  if [ ${#proxies[@]} -eq 0 ]; then
-    echo -e "${RED}[!] No proxies found.${NC}"
-  else
-    echo -e "${GREEN}[+] Showing up to 10 proxies:${NC}"
-    for i in "${!proxies[@]}"; do
-      echo "Proxy[$((i+1))]: tg://proxy?server=$(echo ${proxies[$i]} | cut -d':' -f1)&port=$(echo ${proxies[$i]} | cut -d':' -f2)"
-      [[ $i -eq 9 ]] && break
+# ========= WARP IP Scanner ========= #
+warp_ip_ranges=("162.159.192" "162.159.193" "162.159.195" "188.114.96" "188.114.97")
+
+scan_warp_ips() {
+    echo -e "${CYAN}Scanning best WARP IPv4 IPs...${RESET}"
+    count=0
+    for ip_range in "${warp_ip_ranges[@]}"; do
+        for i in $(shuf -i 1-254 -n 20); do
+            for port in 80 443 8080 2052 2082 2086 2095 8443 8880; do
+                ip="$ip_range.$i"
+                ping_result=$(ping -c 1 -W 1 $ip 2>/dev/null)
+                if echo "$ping_result" | grep -q "time="; then
+                    ping_ms=$(echo "$ping_result" | grep 'time=' | awk -F"time=" '{print $2}' | cut -d' ' -f1)
+                    echo -e "${GREEN}$ip:$port  Ping: ${ping_ms}ms${RESET}"
+                    count=$((count + 1))
+                    [[ $count -ge 10 ]] && return
+                fi
+            done
+        done
     done
-  fi
 
-  echo ""
-  read -p "Press Enter to return to menu..."
-  main_menu
+    [[ $count -eq 0 ]] && echo -e "${RED}❌ No working IPs found.${RESET}"
 }
 
-# Installer Manager
-install_installer() {
-  cp "$0" /data/data/com.termux/files/usr/bin/$INSTALLER_NAME
-  chmod +x /data/data/com.termux/files/usr/bin/$INSTALLER_NAME
-  echo -e "${GREEN}[+] Installer added. Run using '${INSTALLER_NAME}' command.${NC}"
-  sleep 1
-  main_menu
-}
-
-remove_installer() {
-  rm -f /data/data/com.termux/files/usr/bin/$INSTALLER_NAME
-  echo -e "${YELLOW}[-] Installer removed.${NC}"
-  sleep 1
-  main_menu
-}
-
-# Main Menu
+# ========= Main Menu ========= #
 main_menu() {
-  show_header
-  echo "1. WARP IPv4 Scanner"
-  echo "2. Telegram Proxy List"
-  echo "3. Install Installer"
-  echo "4. Remove Installer"
-  echo "0. Exit"
-  echo ""
-  read -p "Select an option: " opt
+    while true; do
+        show_header
+        echo -e "${CYAN}1) WARP IP Scanner"
+        echo -e "2) Telegram Proxy Fetcher"
+        echo -e "3) Exit${RESET}"
+        read -p $'\nChoose an option: ' opt
 
-  case "$opt" in
-    1) warp_scanner ;;
-    2) telegram_proxy ;;
-    3) install_installer ;;
-    4) remove_installer ;;
-    0) exit ;;
-    *) echo "Invalid option."; sleep 1; main_menu ;;
-  esac
+        case $opt in
+            1) scan_warp_ips ;;
+            2) fetch_proxies ;;
+            3) echo -e "${YELLOW}Exiting...${RESET}"; exit 0 ;;
+            *) echo -e "${RED}❌ Invalid option${RESET}" ;;
+        esac
+        echo -e "\nPress Enter to return to menu..."
+        read
+    done
 }
 
-# Run everything
+# ========= Start Script ========= #
 install_dependencies
 main_menu
