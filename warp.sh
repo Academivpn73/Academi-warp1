@@ -1,87 +1,109 @@
 #!/bin/bash
 
-VERSION="1.0.1"
+VERSION="1.1.0"
 CHANNEL_ID="@Academi_vpn"
 SUPPORT_ID="@MahdiAGM0"
 
-# رنگ‌ها
 GREEN="\e[32m"
 RED="\e[31m"
 NC="\e[0m"
 
-# هدر برنامه
+TMP_DIR="warp_tmp"
+PROXY_FILE="telegram_proxies.txt"
+
+# ------------------------
+# HEADER
+# ------------------------
 print_header() {
   clear
-  echo -e "${GREEN}╔══════════════════════════════════════╗"
-  echo -e "║        WARP IP Scanner v$VERSION          ║"
-  echo -e "╠══════════════════════════════════════╣"
+  echo -e "${GREEN}╔════════════════════════════════════════╗"
+  echo -e "║      Academi WARP Tool - v$VERSION          ║"
+  echo -e "╠════════════════════════════════════════╣"
   echo -e "║  Channel : $CHANNEL_ID"
   echo -e "║  Support : $SUPPORT_ID"
-  echo -e "╚══════════════════════════════════════╝${NC}"
+  echo -e "╚════════════════════════════════════════╝${NC}"
   echo ""
 }
 
-# نصب ابزارها
+# ------------------------
+# INSTALL REQUIREMENTS
+# ------------------------
 install_requirements() {
   apt update -y &>/dev/null
-  apt install -y iputils-ping curl &>/dev/null
+  apt install -y curl jq iputils-ping net-tools &>/dev/null
+  mkdir -p $TMP_DIR
 }
 
-# اسکنر WARP
+# ------------------------
+# DOWNLOAD PROXIES
+# ------------------------
+update_proxies() {
+  curl -s https://raw.githubusercontent.com/hookzof/socks5_list/master/tg.txt -o $PROXY_FILE
+}
+
+# ------------------------
+# AUTO UPDATE PROXIES EVERY HOUR
+# ------------------------
+schedule_proxy_update() {
+  (crontab -l 2>/dev/null | grep -v "$PROXY_FILE"; echo "0 * * * * curl -s https://raw.githubusercontent.com/hookzof/socks5_list/master/tg.txt -o $PWD/$PROXY_FILE") | crontab -
+}
+
+# ------------------------
+# SHOW PROXY LIST
+# ------------------------
+proxy_list() {
+  print_header
+  echo -e "🌍 Telegram Proxies (Auto updated):\n"
+
+  if [[ ! -f $PROXY_FILE ]]; then
+    update_proxies
+  fi
+
+  head -n 10 $PROXY_FILE
+  echo
+  read -p "Press Enter to return to menu..."
+}
+
+# ------------------------
+# WARP IP SCANNER (REAL WORKING IPs)
+# ------------------------
 warp_ip_scanner() {
   print_header
-  echo -e "🌐 Scanning best WARP IPv4 IPs...\n"
+  echo -e "🔍 Scanning best WARP IPv4 IPs (up to 10)...\n"
 
-  mkdir -p warp_tmp
-  > warp_tmp/valid_ips.txt
-
-  PORTS=(80 443 8443 2083 2096)
+  > $TMP_DIR/valid_ips.txt
   COUNT=0
 
-  for ip_prefix in 162.159.192 162.159.193 188.114.96 188.114.97; do
-    for i in {1..254}; do
-      ip="$ip_prefix.$i"
-      for port in "${PORTS[@]}"; do
+  for ip in $(shuf -n 200 -i 162.159.192.0-162.159.193.254); do
+    for port in 80 443 2083 8443; do
+      timeout 1 bash -c "</dev/tcp/$ip/$port" &>/dev/null
+      if [[ $? -eq 0 ]]; then
         ping_ms=$(ping -c1 -W1 $ip | grep time= | awk -F'time=' '{print $2}' | cut -d' ' -f1)
         if [[ -n "$ping_ms" ]]; then
-          echo "$ip:$port  ${ping_ms}ms" >> warp_tmp/valid_ips.txt
+          echo "$ip:$port  ${ping_ms}ms" >> $TMP_DIR/valid_ips.txt
           echo -e "${GREEN}$ip:$port  ${ping_ms}ms${NC}"
           ((COUNT++))
           break
         fi
-      done
-      [[ $COUNT -ge 10 ]] && break
+      fi
     done
     [[ $COUNT -ge 10 ]] && break
   done
 
   if [[ $COUNT -eq 0 ]]; then
-    echo -e "${RED}❌ No working WARP IPs found.${NC}"
+    echo -e "${RED}❌ No working IPs found.${NC}"
   else
-    echo -e "\n✅ Top $COUNT Working WARP IPs:"
-    cat warp_tmp/valid_ips.txt
+    echo -e "\n✅ Top $COUNT WARP IPs:"
+    cat $TMP_DIR/valid_ips.txt
   fi
 
   echo
   read -p "Press Enter to return to menu..."
 }
 
-# نمایش لیست پروکسی تلگرام
-proxy_list() {
-  print_header
-  echo -e "🌍 Today's Telegram Proxy List:\n"
-
-  # این بخش قابل آپدیت روزانه‌ست. می‌تونی دستی یا از API پرش کنی.
-  curl -s https://raw.githubusercontent.com/hookzof/socks5_list/master/tg.txt | head -n 10 || {
-    echo "tg://proxy?server=proxy1.example.com&port=443&secret=ee00000000000000000000000000000000000000"
-    echo "tg://proxy?server=proxy2.example.com&port=443&secret=ee00000000000000000000000000000000000000"
-  }
-
-  echo
-  read -p "Press Enter to return to menu..."
-}
-
-# منو اصلی
+# ------------------------
+# MAIN MENU
+# ------------------------
 main_menu() {
   while true; do
     print_header
@@ -89,17 +111,21 @@ main_menu() {
     echo "2️⃣  Telegram Proxy List"
     echo "0️⃣  Exit"
     echo
-    read -p "Select an option: " choice
+    read -p "Choose an option: " choice
 
     case $choice in
       1) warp_ip_scanner ;;
       2) proxy_list ;;
-      0) echo -e "\nExiting... 👋"; exit 0 ;;
-      *) echo -e "${RED}Invalid option!${NC}"; sleep 1 ;;
+      0) echo -e "\n${GREEN}Exiting...${NC}"; exit 0 ;;
+      *) echo -e "${RED}Invalid option.${NC}"; sleep 1 ;;
     esac
   done
 }
 
-# اجرای اولیه
+# ------------------------
+# START
+# ------------------------
 install_requirements
+update_proxies
+schedule_proxy_update
 main_menu
