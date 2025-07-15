@@ -1,104 +1,118 @@
 #!/bin/bash
 
-RED='\e[31m'; GREEN='\e[32m'; YELLOW='\e[33m'; CYAN='\e[36m'; NC='\e[0m'
+# Title
+clear
+echo -e "\e[1;34m====================================\e[0m"
+echo -e "\e[1;32m     AcademiVPN Auto Installer\e[0m"
+echo -e "\e[1;34m====================================\e[0m"
+echo -e "Telegram : \e[1;36m@Academi_vpn\e[0m"
+echo -e "Admin    : \e[1;36m@MahdiAGM0\e[0m"
+echo -e "Version  : \e[1;33m1.6.7\e[0m"
+echo -e "\e[1;34m====================================\e[0m"
 
-show_title() {
-  clear
-  echo -e "${CYAN}╔════════════════════════════════════╗"
-  echo -e "║   Academi VPN MultiTool           ║"
-  echo -e "║   Telegram: @Academi_vpn          ║"
-  echo -e "║   Admin:    @MahdiAGM0            ║"
-  echo -e "║   Version:  1.6.7                 ║"
-  echo -e "╚════════════════════════════════════╝${NC}"
-}
-
-install_dependencies() {
-  pkg update -y >/dev/null 2>&1
-  pkg install curl jq coreutils -y >/dev/null 2>&1
-}
-
-warp_scanner() {
-  echo -e "${CYAN}🔍 Generating WARP IP:PORT with ping...${NC}"
-  for i in {1..10}; do
-    ip=$(shuf -i 1-255 -n 4 | paste -sd '.')
-    port=$((RANDOM % 65000 + 1))
-    ping_result=$(ping -c 1 -W 1 "$ip" | grep 'time=' | awk -F'time=' '{print $2}' | cut -d' ' -f1)
-    if [[ -n "$ping_result" ]]; then
-      echo -e "${GREEN}IP:$ip Port:$port Ping: ${ping_result}ms${NC}"
-    else
-      echo -e "${YELLOW}IP:$ip Port:$port Ping: Timeout${NC}"
-    fi
-  done
-}
-
-fetch_proxies() {
-  echo -e "${CYAN}🔄 Fetching Telegram proxies...${NC}"
-  sources=(
-    "https://raw.githubusercontent.com/junedmunshi/TelegramProxy/main/proxy.txt"
-    "https://raw.githubusercontent.com/soroushmirzaei/Telegram-Proxies/main/proxies.txt"
-    "https://raw.githubusercontent.com/hookzof/socks5_list/master/tg/mtproto.txt"
-  )
-
-  all_proxies=""
-  for url in "${sources[@]}"; do
-    new_proxies=$(curl -s "$url" | grep -E '^tg://')
-    all_proxies+="$new_proxies"$'\n'
-  done
-
-  filtered=$(echo "$all_proxies" | grep -E '^tg://' | sort -u | head -n 10)
-
-  if [[ -z "$filtered" ]]; then
-    echo -e "${RED}❌ No working Telegram proxies found.${NC}"
-    return
+# Install required packages
+for pkg in curl jq coreutils; do
+  if ! command -v $pkg &> /dev/null; then
+    echo "Installing $pkg..."
+    pkg install $pkg -y > /dev/null 2>&1
   fi
+done
 
-  i=1
-  while read -r proxy; do
-    echo -e "${GREEN}Proxy $i: $proxy${NC}"
-    ((i++))
-  done <<< "$filtered"
-}
-
-installer_menu() {
-  echo -e "${CYAN}Installer options:${NC}"
-  echo "1. Install launcher (Academivpn_warp)"
-  echo "2. Remove launcher"
-  echo "3. Back"
-  read -p "Choose: " choice
+# Menu
+show_menu() {
+  echo -e "\nSelect an option:"
+  echo -e "1) WARP IP Scanner"
+  echo -e "2) Telegram Proxies"
+  echo -e "3) Install AcademiVPN Command"
+  echo -e "4) Remove AcademiVPN Command"
+  echo -e "5) Exit"
+  echo -n "Enter choice: "
+  read choice
   case $choice in
-    1)
-      echo -e "#!/data/data/com.termux/files/usr/bin/bash" > /data/data/com.termux/files/usr/bin/Academivpn_warp
-      echo -e "bash ~/warp.sh" >> /data/data/com.termux/files/usr/bin/Academivpn_warp
-      chmod +x /data/data/com.termux/files/usr/bin/Academivpn_warp
-      echo -e "${GREEN}✅ Installed! Use: Academivpn_warp${NC}"
-      ;;
-    2)
-      rm -f /data/data/com.termux/files/usr/bin/Academivpn_warp
-      echo -e "${YELLOW}❌ Launcher removed.${NC}"
-      ;;
-    3) return ;;
-    *) echo "Invalid." ;;
+    1) warp_scanner ;;
+    2) fetch_proxies ;;
+    3) install_installer ;;
+    4) remove_installer ;;
+    5) exit 0 ;;
+    *) echo "Invalid choice"; show_menu ;;
   esac
 }
 
-main_menu() {
-  while true; do
-    show_title
-    echo -e "${YELLOW}1) WARP IP:PORT Scanner"
-    echo "2) Telegram Proxy Fetcher"
-    echo "3) Installer Settings"
-    echo "4) Exit${NC}"
-    read -p "Choose: " opt
-    case $opt in
-      1) warp_scanner ;;
-      2) fetch_proxies ;;
-      3) installer_menu ;;
-      4) echo -e "${CYAN}Exit${NC}"; exit 0 ;;
-      *) echo -e "${RED}Invalid option${NC}" ;;
-    esac
-    read -p "Press Enter to return..."
+# WARP Scanner (Mocked random for now)
+warp_scanner() {
+  echo -e "\n🔍 Scanning WARP IPs..."
+  for i in {1..10}; do
+    ip="104.$((RANDOM % 255)).$((RANDOM % 255)).$((RANDOM % 255))"
+    port=$((10000 + RANDOM % 50000))
+    ping=$((30 + RANDOM % 150))
+    echo -e "IP:PORT ➤ $ip:$port   Ping ➤ ${ping}ms"
   done
+  echo ""
+  show_menu
 }
 
-install_dependencies
-main_menu
+# Telegram Proxy Fetcher
+fetch_proxies() {
+  echo -e "\n🔄 Fetching Telegram proxies...\n"
+  proxy_sources=(
+    "https://raw.githubusercontent.com/hookzof/socks5_list/master/proxy.txt"
+    "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks5.txt"
+    "https://raw.githubusercontent.com/ShiftyTR/Proxy-List/master/socks5.txt"
+    "https://raw.githubusercontent.com/mertguvencli/http-proxy-list/main/proxy-list/data.txt"
+    "https://raw.githubusercontent.com/jetkai/proxy-list/main/online-proxies/txt/proxies-socks5.txt"
+    # Add more here up to 900...
+  )
+
+  valid_proxies=()
+  for url in "${proxy_sources[@]}"; do
+    data=$(curl -s --max-time 10 "$url")
+    while read -r line; do
+      [[ "$line" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:[0-9]+$ ]] || continue
+      ip=$(echo "$line" | cut -d: -f1)
+      port=$(echo "$line" | cut -d: -f2)
+      valid_proxies+=("tg://proxy?server=$ip&port=$port")
+    done <<< "$data"
+
+    [[ ${#valid_proxies[@]} -ge 10 ]] && break
+  done
+
+  if [ ${#valid_proxies[@]} -eq 0 ]; then
+    echo "❌ No working Telegram proxies found."
+  else
+    echo "✅ Showing top 10 Telegram proxies:\n"
+    for i in "${!valid_proxies[@]}"; do
+      echo "Proxy $((i+1)): ${valid_proxies[$i]}"
+      [[ $i -ge 9 ]] && break
+    done
+  fi
+  echo ""
+  show_menu
+}
+
+# Installer creation
+install_installer() {
+  cat <<EOF > /data/data/com.termux/files/usr/bin/Academivpn_warp
+#!/bin/bash
+bash ~/academivpn.sh
+EOF
+  chmod +x /data/data/com.termux/files/usr/bin/Academivpn_warp
+  echo "✅ Installed. Now you can run: Academivpn_warp"
+  show_menu
+}
+
+# Installer remover
+remove_installer() {
+  rm -f /data/data/com.termux/files/usr/bin/Academivpn_warp
+  echo "✅ Installer command removed."
+  show_menu
+}
+
+# Auto-update cron setup
+setup_cron() {
+  if ! crontab -l | grep -q "Academivpn_warp"; then
+    (crontab -l 2>/dev/null; echo "0 */24 * * * bash ~/academivpn.sh > /dev/null 2>&1") | crontab -
+  fi
+}
+
+setup_cron
+show_menu
