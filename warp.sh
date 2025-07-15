@@ -1,85 +1,95 @@
 #!/bin/bash
 
-#────────────────────────────#
-#     Academi WARP Tools     #
-#     Telegram: @Academi_vpn #
-#────────────────────────────#
+# ===================================================
+#  Academi VPN Toolkit
+#  Telegram: @Academi_vpn
+#  Admin: @MahdiAGM0
+# ===================================================
 
-GREEN='\e[32m'
-BLUE='\e[34m'
-RED='\e[31m'
-RESET='\e[0m'
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
 
-show_menu() {
-    echo -e "${BLUE}┌────────────────────────────┐${RESET}"
-    echo -e "${BLUE}│  Academi VPN Main Menu     │${RESET}"
-    echo -e "${BLUE}├────────────────────────────┤${RESET}"
-    echo -e "  [1] WARP IPv4 Scanner"
-    echo -e "  [2] Telegram Proxy Viewer"
-    echo -e "  [0] Exit"
-    echo -e "${BLUE}└────────────────────────────┘${RESET}"
+SAVE_DIR="Academi_Configs"
+mkdir -p "$SAVE_DIR"
+MAX_IPS=10
+PORTS=(80 443 8080 8443 2052 2082 2086 2095)
+
+# Get external IPv4 from Cloudflare
+get_warp_ip() {
+  curl --connect-timeout 3 -s4 https://www.cloudflare.com/cdn-cgi/trace | grep '^ip=' | cut -d= -f2
 }
 
-warp_scanner() {
-    echo -e "\n${BLUE}🔍 Scanning best WARP IPv4 IPs...${RESET}"
-
-    PORTS=(80 443 8080 8443)
-    MAX_IPS=10
-    > good_ips.txt
-
-    count=0
-
-    while [[ $count -lt $MAX_IPS ]]; do
-        IP=$(curl -s https://cloudflare.com/cdn-cgi/trace | grep ip= | cut -d= -f2 | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}')
-        
-        if [[ -z "$IP" ]]; then
-            continue
-        fi
-
-        for PORT in "${PORTS[@]}"; do
-            timeout 1 bash -c "cat < /dev/null > /dev/tcp/$IP/$PORT" 2>/dev/null
-            if [[ $? -eq 0 ]]; then
-                PING_MS=$(ping -c 1 -W 1 $IP | grep 'time=' | awk -F'time=' '{print $2}' | cut -d' ' -f1)
-                if [[ -n "$PING_MS" ]]; then
-                    echo "$IP:$PORT  $PING_MS ms" >> good_ips.txt
-                    ((count++))
-                    break
-                fi
-            fi
-        done
-    done
-
-    echo -e "${GREEN}\n✅ Top $MAX_IPS Working WARP IPs:${RESET}"
-    cat good_ips.txt
-    echo ""
+# Ping function using TCP connect
+test_ip() {
+  IP=$1
+  for PORT in "${PORTS[@]}"; do
+    START=$(date +%s%3N)
+    timeout 1 bash -c "echo >/dev/tcp/$IP/$PORT" 2>/dev/null
+    if [ $? -eq 0 ]; then
+      END=$(date +%s%3N)
+      PING=$(echo "scale=2; ($END - $START)/1000" | bc)
+      echo "$IP:$PORT  Ping(${PING}ms)"
+      return 0
+    fi
+  done
+  return 1
 }
 
-telegram_proxy_viewer() {
-    echo -e "\n${BLUE}📢 Telegram Proxy List:${RESET}"
-
-    # 📝 این لیست رو خودت می‌تونی روزانه ویرایش کنی:
-    proxies=(
-        "tg://proxy?server=proxy1.academi.ir&port=443&secret=ee00000000000000000000000000000000000000"
-        "tg://proxy?server=proxy2.academi.ir&port=443&secret=ee00000000000000000000000000000000000000"
-        "tg://proxy?server=proxy3.academi.ir&port=443&secret=ee00000000000000000000000000000000000000"
-    )
-
-    for proxy in "${proxies[@]}"; do
-        echo -e "${GREEN}- $proxy${RESET}"
-    done
-
-    echo ""
+# Warp Scanner
+scan_warp_ips() {
+  echo -e "${YELLOW}Scanning best WARP IPv4 IPs...${NC}"
+  COUNT=0
+  while [ $COUNT -lt $MAX_IPS ]; do
+    IP=$(get_warp_ip)
+    if [[ $IP =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+      if test_ip $IP; then
+        ((COUNT++))
+      fi
+    fi
+  done
 }
 
-# Start
-clear
+# Telegram Proxy List (update manually)
+show_telegram_proxies() {
+  echo -e "${GREEN}Available Telegram Proxies:${NC}"
+  echo ""
+  cat <<EOF
+tg://proxy?server=1.1.1.1&port=443&secret=ee00000000000000000000000000000000000000
+tg://proxy?server=2.2.2.2&port=443&secret=ee11111111111111111111111111111111111111
+tg://proxy?server=3.3.3.3&port=443&secret=ee22222222222222222222222222222222222222
+EOF
+  echo ""
+  echo -e "${YELLOW}You can edit proxies in the script directly.${NC}"
+}
+
+# Main Menu
 while true; do
-    show_menu
-    read -p $'\nChoose an option: ' choice
-    case "$choice" in
-        1) warp_scanner ;;
-        2) telegram_proxy_viewer ;;
-        0) echo -e "${RED}Exiting...${RESET}"; exit ;;
-        *) echo -e "${RED}❌ Invalid option!${RESET}" ;;
-    esac
+  echo -e "${GREEN}"
+  echo "============================"
+  echo "    Academi VPN Toolkit"
+  echo "============================"
+  echo -e "${NC}"
+  echo "1. Warp IPv4 IP Scanner"
+  echo "2. Telegram Proxy List"
+  echo "0. Exit"
+  echo ""
+  read -p "Choose an option: " CHOICE
+
+  case $CHOICE in
+    1)
+      scan_warp_ips
+      ;;
+    2)
+      show_telegram_proxies
+      ;;
+    0)
+      echo "Goodbye!"
+      exit 0
+      ;;
+    *)
+      echo -e "${RED}Invalid option. Try again.${NC}"
+      ;;
+  esac
 done
