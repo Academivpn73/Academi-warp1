@@ -11,25 +11,30 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-SAVE_DIR="Academi_Configs"
-mkdir -p "$SAVE_DIR"
 MAX_IPS=10
-PORTS=(80 443 8080 8443 2052 2082 2086 2095)
+PORTS=(80 443 2086 8443 2052 2087)
+TEMP_IP_FILE=$(mktemp)
+PROXY_CACHE_DIR="$HOME/.academi_proxy_cache"
+TODAY=$(date +%F)
+PROXY_FILE="$PROXY_CACHE_DIR/proxies_$TODAY.txt"
 
-# Get external IPv4 from Cloudflare
+mkdir -p "$PROXY_CACHE_DIR"
+
+# Get IPv4 from WARP interface
 get_warp_ip() {
-  curl --connect-timeout 3 -s4 https://www.cloudflare.com/cdn-cgi/trace | grep '^ip=' | cut -d= -f2
+  curl -s4 --interface wgcf-warp https://api.ipify.org
 }
 
-# Ping function using TCP connect
+# Test IP for open port and ping
 test_ip() {
-  IP=$1
+  local IP=$1
   for PORT in "${PORTS[@]}"; do
-    START=$(date +%s%3N)
-    timeout 1 bash -c "echo >/dev/tcp/$IP/$PORT" 2>/dev/null
+    timeout 1 bash -c "</dev/tcp/$IP/$PORT" &>/dev/null
     if [ $? -eq 0 ]; then
-      END=$(date +%s%3N)
-      PING=$(echo "scale=2; ($END - $START)/1000" | bc)
+      local START=$(date +%s%3N)
+      timeout 1 bash -c "</dev/tcp/$IP/$PORT" &>/dev/null
+      local END=$(date +%s%3N)
+      local PING=$(echo "scale=2; ($END - $START)/1000" | bc)
       echo "$IP:$PORT  Ping(${PING}ms)"
       return 0
     fi
@@ -37,31 +42,48 @@ test_ip() {
   return 1
 }
 
-# Warp Scanner
+# WARP IPv4 Scanner
 scan_warp_ips() {
-  echo -e "${YELLOW}Scanning best WARP IPv4 IPs...${NC}"
+  echo -e "${YELLOW}🔍 Scanning best WARP IPv4 IPs...${NC}"
   COUNT=0
+  > "$TEMP_IP_FILE"
   while [ $COUNT -lt $MAX_IPS ]; do
     IP=$(get_warp_ip)
     if [[ $IP =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-      if test_ip $IP; then
+      if test_ip "$IP" >> "$TEMP_IP_FILE"; then
         ((COUNT++))
       fi
     fi
+    sleep 1
   done
+  echo -e "${GREEN}\n✅ Found $COUNT working WARP IPs:${NC}"
+  cat "$TEMP_IP_FILE"
+  echo ""
 }
 
-# Telegram Proxy List (update manually)
+# Fetch and cache proxy list if not already cached today
+fetch_telegram_proxies() {
+  if [[ ! -f "$PROXY_FILE" ]]; then
+    echo -e "${YELLOW}📡 Fetching fresh Telegram MTProto proxies...${NC}"
+    curl -s "https://mtpro.xyz/api/?type=mtproto" | \
+      jq -r '.[] | "\(.host):\(.port) secret:\(.secret) ping:\(.ping)ms country:\(.country)"' \
+      > "$PROXY_FILE"
+  else
+    echo -e "${GREEN}✔ Using cached proxy list for today ($TODAY).${NC}"
+  fi
+}
+
+# Show proxies
 show_telegram_proxies() {
-  echo -e "${GREEN}Available Telegram Proxies:${NC}"
+  fetch_telegram_proxies
+  echo -e "${GREEN}\nTop 10 Telegram MTProto Proxies:${NC}"
+  head -n 10 "$PROXY_FILE" | while IFS= read -r line; do
+    HOST=$(echo "$line" | awk -F':' '{print $1}')
+    PORT=$(echo "$line" | awk -F'[: ]' '{print $2}')
+    SECRET=$(echo "$line" | awk -F'secret:' '{print $2}' | awk '{print $1}')
+    echo "tg://proxy?server=${HOST}&port=${PORT}&secret=${SECRET}"
+  done
   echo ""
-  cat <<EOF
-tg://proxy?server=1.1.1.1&port=443&secret=ee00000000000000000000000000000000000000
-tg://proxy?server=2.2.2.2&port=443&secret=ee11111111111111111111111111111111111111
-tg://proxy?server=3.3.3.3&port=443&secret=ee22222222222222222222222222222222222222
-EOF
-  echo ""
-  echo -e "${YELLOW}You can edit proxies in the script directly.${NC}"
 }
 
 # Main Menu
@@ -71,25 +93,18 @@ while true; do
   echo "    Academi VPN Toolkit"
   echo "============================"
   echo -e "${NC}"
-  echo "1. Warp IPv4 IP Scanner"
-  echo "2. Telegram Proxy List"
-  echo "0. Exit"
+  echo "1) Warp IPv4 Scanner"
+  echo "2) Telegram Proxy List (auto-updated daily)"
+  echo "0) Exit"
   echo ""
-  read -p "Choose an option: " CHOICE
-
-  case $CHOICE in
-    1)
-      scan_warp_ips
-      ;;
-    2)
-      show_telegram_proxies
-      ;;
-    0)
-      echo "Goodbye!"
-      exit 0
-      ;;
-    *)
-      echo -e "${RED}Invalid option. Try again.${NC}"
-      ;;
+  read -p "Choose an option: " OPT
+  case $OPT in
+    1) scan_warp_ips ;;
+    2) show_telegram_proxies ;;
+    0) echo "Goodbye!"; break ;;
+    *) echo -e "${RED}Invalid option. Try again.${NC}" ;;
   esac
 done
+
+# Cleanup
+rm -f "$TEMP_IP_FILE"
