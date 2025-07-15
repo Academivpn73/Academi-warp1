@@ -1,35 +1,84 @@
 #!/bin/bash
-# Telegram: @Academi_vpn
-# Admin: @MahdiAGM0
-# Project: Academi_vpn WARP Installer (based on fscarmen/warp menu.sh)
 
-start=$(date +%s)
+# رنگ‌ها
+GREEN='\033[0;32m'
+NC='\033[0m' # بدون رنگ
 
-# تابع‌های رنگ
-red(){ echo -e "\033[31m\033[01m$1\033[0m"; }
-green(){ echo -e "\033[32m\033[01m$1\033[0m"; }
-yellow(){ echo -e "\033[33m\033[01m$1\033[0m"; }
+echo -e "${GREEN}Telegram:@Academi_vpn${NC}"
+echo -e "اسکن IP های سالم و تولید کانفیگ WireGuard..."
 
-# بررسی root
-[[ $(id -u) != 0 ]] && red "اسکریپت باید با root اجرا شود." && exit 1
+# مسیر ذخیره کانفیگ‌ها
+CONFIG_DIR="Academi_Configs"
+mkdir -p "$CONFIG_DIR"
 
-green "شروع نصب WARP با برند Academi_vpn..."
+# تعداد آی‌پی مورد نظر برای تست
+COUNT=20
 
-# چک curl و نصب در صورت نبودن
-if ! command -v curl >/dev/null 2>&1; then
-  yellow "در حال نصب curl..."
-  if command -v apt >/dev/null 2>&1; then apt update -y && apt install curl -y
-  elif command -v yum >/dev/null 2>&1; then yum install curl -y
-  fi
-fi
+# پورت‌هایی که می‌خوای تست کنی
+PORTS=(80 443 8080 8443 2052 2082 2086 2095 8880)
 
-# دانلود نسخه اصلی منو و اجرای آن
-bash <(curl -fsSL https://gitlab.com/fscarmen/warp/-/raw/main/menu.sh)
+# تابع برای دریافت پینگ از آی‌پی
+function get_ping() {
+    ip=$1
+    ping -c 1 -W 1 "$ip" | grep 'time=' | sed -E 's/.*time=([0-9.]+) ms/\1/'
+}
 
-# اگر مایل باشی می‌تونی تمام گزینه‌های منو (install, wg4, wg6, d, a, i, e, b, uninstall و...) رو توسط نام برندت **Academi_vpn** توی منو یا متن‌ها تغییر بدی
+# تابع برای گرفتن کشور با IP
+function get_country_flag() {
+    ip=$1
+    country_code=$(curl -sL "https://ipinfo.io/$ip/country")
+    flag=$(echo "$country_code" | tr 'A-Z' '🇦🇦')
+    echo "$flag"
+}
 
-end=$(date +%s)
-duration=$((end - start))
+# تابع تست پورت باز
+function is_port_open() {
+    ip=$1
+    port=$2
+    timeout 1 bash -c "echo > /dev/tcp/$ip/$port" 2>/dev/null && echo "open" || echo "closed"
+}
 
-green "نصب برای برند Academi_vpn با موفقیت انجام شد! زمان صرف‌شده: ${duration} ثانیه."
-green "برای پشتیبانی: @Academi_vpn یا ادمین: @MahdiAGM0"
+# تابع ساخت کانفیگ وایرگارد
+function generate_wg_config() {
+    ip=$1
+    port=$2
+    private_key=$(wg genkey)
+    public_key=$(echo "$private_key" | wg pubkey)
+    endpoint="$ip:$port"
+    config_file="$CONFIG_DIR/wg_$ip.conf"
+    country_flag=$(get_country_flag "$ip")
+
+    cat > "$config_file" <<EOF
+# Telegram:@Academi_vpn $country_flag
+[Interface]
+PrivateKey = $private_key
+Address = 172.16.0.2/32
+DNS = 1.1.1.1
+
+[Peer]
+PublicKey = $(curl -sL https://raw.githubusercontent.com/mishakorzik/WARP-WireGuard/main/warp.pub)
+AllowedIPs = 0.0.0.0/0
+Endpoint = $endpoint
+PersistentKeepalive = 25
+EOF
+    echo -e "${GREEN}✔ کانفیگ ساخته شد: $config_file${NC}"
+}
+
+# تولید IP‌های تصادفی (بهینه‌تر: محدوده Cloudflare)
+for ((i = 0; i < COUNT; i++)); do
+    ip="162.159.$((RANDOM % 255)).$((RANDOM % 255))"
+    ping_time=$(get_ping "$ip")
+
+    if [[ -n "$ping_time" ]]; then
+        for port in "${PORTS[@]}"; do
+            status=$(is_port_open "$ip" "$port")
+            if [[ "$status" == "open" ]]; then
+                echo -e "$ip:$port  ${GREEN}Ping:${ping_time}ms${NC}"
+                generate_wg_config "$ip" "$port"
+                break
+            fi
+        done
+    fi
+done
+
+echo -e "${GREEN}تمام شد! کانفیگ‌ها در پوشه $CONFIG_DIR ذخیره شدند.${NC}"
