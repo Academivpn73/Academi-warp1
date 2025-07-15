@@ -1,119 +1,116 @@
 #!/bin/bash
 
-# =========[ Setup Variables ]=========
-PROXY_FILE="/tmp/telegram_proxies.txt"
+# ===[ AcademiVPN Script ]===
 VERSION="1.6.0"
-CHANNEL="@Academi_vpn"
-ADMIN="@MahdiAGM0"
+PROXY_FILE="$HOME/.academi_proxies.txt"
+CRON_JOB="/etc/cron.daily/academivpn_proxy_update"
 
-# =========[ Auto Dependency Installer ]=========
-install_dependencies() {
-    echo "📦 Installing required packages..."
-    pkg update -y >/dev/null 2>&1
-    pkg install curl jq -y >/dev/null 2>&1
-}
-
-# =========[ Fetch MTProto Proxies ]=========
-fetch_proxies() {
-    echo "🔄 Fetching fresh Telegram proxies..."
-    curl -s "https://raw.githubusercontent.com/hookzof/socks5_list/master/tg/mtproto.txt" -o "$PROXY_FILE"
-
-    if [[ ! -s "$PROXY_FILE" ]]; then
-        echo "❌ No valid Telegram proxies found."
-        return 1
-    fi
-
-    echo "✅ Proxies updated."
-    return 0
-}
-
-# =========[ Auto-update every 5 hours ]=========
-auto_update_proxies() {
-    while true; do
-        fetch_proxies
-        sleep 18000  # 5 hours
-    done &
-}
-
-# =========[ Display Title ]=========
-print_title() {
+show_header() {
     clear
-    echo -e "\e[1;34m===========================================\e[0m"
-    echo -e "\e[1;32m AcademiVPN Panel - Warp & Proxy Tool\e[0m"
-    echo -e "\e[1;34m===========================================\e[0m"
-    echo -e "Version : \e[1;33m$VERSION\e[0m"
-    echo -e "Channel : \e[1;36m$CHANNEL\e[0m"
-    echo -e "Admin   : \e[1;36m$ADMIN\e[0m"
-    echo -e "\e[1;34m===========================================\e[0m"
+    echo -e "┌────────────────────────────────────────────┐"
+    echo -e "│       🛰️  AcademiVPN Proxy Tool v$VERSION       │"
+    echo -e "├────────────────────────────────────────────┤"
+    echo -e "│ 🌐 Channel : @Academi_vpn                   │"
+    echo -e "│ 👤 Admin   : @MahdiAGM0                     │"
+    echo -e "└────────────────────────────────────────────┘"
 }
 
-# =========[ Main Menu ]=========
-main_menu() {
-    while true; do
-        print_title
-        echo -e "\n[1] Generate Warp IPs"
-        echo "[2] Install/Uninstall Installer Command"
-        echo "[3] Show Telegram MTProto Proxies"
-        echo "[4] Exit"
-        echo -ne "\nSelect an option: "; read choice
+fetch_proxies() {
+    echo -e "\n🔄 Fetching latest Telegram proxies..."
 
-        case $choice in
-            1)
-                echo -e "\n🔍 Generating 10 Warp IPs with random ports...\n"
-                for i in {1..10}; do
-                    ip=$(curl -s https://api64.ipify.org)
-                    port=$((RANDOM % 65535 + 1))
-                    echo "IP $i: $ip:$port"
-                done
-                echo -e "\nPress Enter to return..."
-                read
-                ;;
-            2)
-                echo -e "\n[1] Install command (Academivpn_warp)"
-                echo "[2] Uninstall command"
-                echo "[3] Back"
-                echo -ne "Select: "; read opt
-                if [[ $opt == 1 ]]; then
-                    cp "$0" /data/data/com.termux/files/usr/bin/Academivpn_warp
-                    chmod +x /data/data/com.termux/files/usr/bin/Academivpn_warp
-                    echo "✅ Installed. Now run: Academivpn_warp"
-                    sleep 2
-                elif [[ $opt == 2 ]]; then
-                    rm -f /data/data/com.termux/files/usr/bin/Academivpn_warp
-                    echo "🗑️ Uninstalled successfully."
-                    sleep 1
-                fi
-                ;;
-            3)
-                echo -e "\n🌐 Top 10 Telegram MTProto Proxies:\n"
-                if [[ ! -s "$PROXY_FILE" ]]; then
-                    fetch_proxies || {
-                        echo -e "\nPress Enter to return..."; read
-                        continue
-                    }
-                fi
-                COUNT=1
-                while IFS= read -r line && [[ $COUNT -le 10 ]]; do
-                    echo "Proxy $COUNT: $line"
-                    ((COUNT++))
-                done < "$PROXY_FILE"
-                echo -e "\nPress Enter to return..."
-                read
-                ;;
-            4)
-                echo -e "\n👋 Exiting..."
-                exit 0
-                ;;
-            *)
-                echo -e "\n❌ Invalid option."
-                sleep 1
-                ;;
-        esac
+    TMP_PROXIES=$(mktemp)
+
+    SOURCES=(
+        "https://raw.githubusercontent.com/aliilapro/MTProtoProxy/main/mtproto.txt"
+        "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/mtproto.txt"
+        "https://raw.githubusercontent.com/hookzof/socks5_list/master/proxy.txt"
+    )
+
+    for url in "${SOURCES[@]}"; do
+        data=$(curl -s --max-time 10 "$url")
+        echo "$data" | grep -Eo 't.me/proxy\?server=[^[:space:]]+' >> "$TMP_PROXIES"
     done
+
+    sort -u "$TMP_PROXIES" > "$PROXY_FILE"
+    rm -f "$TMP_PROXIES"
+
+    if [[ -s "$PROXY_FILE" ]]; then
+        echo -e "✅ Proxies updated successfully."
+    else
+        echo -e "❌ Failed to fetch valid proxies."
+    fi
 }
 
-# =========[ Main Execution ]=========
-install_dependencies
-fetch_proxies
-auto_update_proxies
-main_menu
+generate_warp_ips() {
+    echo -e "\n🌍 Generating 10 random WARP IPs with ports...\n"
+    for i in {1..10}; do
+        IP=$(shuf -i 162000000000-162255255255 -n 1 | awk '{ip=sprintf("%d.%d.%d.%d", int($1/256/256/256)%256, int($1/256/256)%256, int($1/256)%256, $1%256); print ip}')
+        PORT=$((RANDOM % 65535 + 1000))
+        echo "📶 $IP:$PORT"
+    done
+    echo -e "\nPress Enter to return..."
+    read
+}
+
+install_launcher() {
+    echo -e "\n📥 Installing launcher as 'Academivpn_warp'"
+    BIN_PATH="/usr/local/bin/Academivpn_warp"
+    sudo cp "$0" "$BIN_PATH"
+    sudo chmod +x "$BIN_PATH"
+    echo -e "✅ Installed. Now you can run: Academivpn_warp"
+}
+
+remove_launcher() {
+    echo -e "\n🗑️ Removing launcher..."
+    sudo rm -f /usr/local/bin/Academivpn_warp
+    echo -e "✅ Removed."
+}
+
+enable_daily_auto_update() {
+    echo -e "\n🕐 Enabling daily auto-update..."
+    sudo tee "$CRON_JOB" > /dev/null <<EOF
+#!/bin/bash
+bash "$0" --auto-update
+EOF
+    sudo chmod +x "$CRON_JOB"
+    echo "✅ Daily auto-update enabled via cron."
+}
+
+# ===[ Auto Update Handler ]===
+if [[ "$1" == "--auto-update" ]]; then
+    fetch_proxies
+    exit 0
+fi
+
+# ===[ Main Menu ]===
+while true; do
+    show_header
+    echo -e "\n📋 Choose an option:"
+    echo "1) 📥 Install Launcher"
+    echo "2) ❌ Remove Launcher"
+    echo "3) 🌐 Show Top 10 Telegram Proxies"
+    echo "4) 🌍 Generate 10 WARP IPs"
+    echo "5) 🔁 Enable Daily Proxy Auto-Update"
+    echo "0) 🧱 Exit"
+
+    echo -ne "\n>> "
+    read -r option
+
+    case "$option" in
+        1) install_launcher ;;
+        2) remove_launcher ;;
+        3)
+            echo -e "\n🌐 Top 10 Telegram MTProto Proxies:\n"
+            if [[ ! -s "$PROXY_FILE" ]]; then
+                fetch_proxies
+            fi
+            head -n 10 "$PROXY_FILE"
+            echo -e "\nPress Enter to return..."
+            read
+            ;;
+        4) generate_warp_ips ;;
+        5) enable_daily_auto_update ;;
+        0) echo -e "\n👋 Goodbye!"; break ;;
+        *) echo -e "\n❌ Invalid option. Try again."; sleep 1 ;;
+    esac
+done
