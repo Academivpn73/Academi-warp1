@@ -1,129 +1,98 @@
-#!/bin/bash
+#!/data/data/com.termux/files/usr/bin/bash
 
-# ╔═══════════════════════════════════════╗
-# ║ Academi Tool - Version 1.0.5         ║
-# ║ Channel: @Academi_vpn                ║
-# ║ Support: @MahdiAGM0                  ║
-# ╚═══════════════════════════════════════╝
+# Version
+VERSION="1.0.0"
 
+# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
+YELLOW='\033[1;33m'
 NC='\033[0m'
 
-# پورت‌های مهم
-PORTS=(80 443 8080 8443 2083 2087 2053 2095 2096 8880)
+# Channel Info
+CHANNEL="@Academi_vpn"
+ADMIN="@MahdiAGM0"
 
-# رنج‌های واقعی WARP
-RANGES=(
-  "162.159.192"
-  "162.159.193"
-  "162.159.195"
-  "188.114.96"
-  "188.114.97"
-  "188.114.98"
-)
-
-# نصب ابزارها
-install_deps() {
-  for pkg in curl timeout ping jq; do
+# Dependencies
+install_dependencies() {
+  for pkg in curl jq; do
     if ! command -v $pkg &>/dev/null; then
       echo -e "${YELLOW}Installing $pkg...${NC}"
-      apt update -y &>/dev/null
-      apt install -y $pkg &>/dev/null
+      pkg install -y $pkg >/dev/null 2>&1
     fi
   done
 }
 
-# تست IP و پورت
-test_ip() {
-  ip=$1
-  for port in "${PORTS[@]}"; do
-    timeout 1 bash -c "</dev/tcp/$ip/$port" &>/dev/null
-    if [ $? -eq 0 ]; then
-      ping_ms=$(ping -c 1 -W 1 $ip | grep "time=" | awk -F'time=' '{print $2}' | cut -d' ' -f1)
-      if [[ $ping_ms != "" ]]; then
-        echo -e "${GREEN}${ip}:${port}${NC}  Ping: ${ping_ms}ms"
-        return 0
-      fi
-    fi
-  done
-  return 1
-}
+# WARP IPv4 Scanner
+warp_ipv4_scanner() {
+  echo -e "${CYAN}\n🔍 Scanning best WARP IPv4 IPs (max 10)...${NC}"
+  sleep 1
 
-# ساخت IPهای رندوم از رنج‌ها
-generate_ips() {
-  base=$1
-  for i in $(shuf -i 2-254 -n 20); do
-    echo "${base}.${i}"
-  done
-}
-
-# اسکن IPهای WARP
-warp_scan() {
-  echo -e "\n${CYAN}🔍 Scanning best WARP IPv4 IPs...${NC}"
   count=0
-  found=0
-  for range in "${RANGES[@]}"; do
-    for ip in $(generate_ips "$range"); do
-      test_ip "$ip" &
+  for i in {1..300}; do
+    IP="162.159.$((RANDOM % 256)).$((RANDOM % 256))"
+    PORT=$((RANDOM % 65535 + 1))
+    ping_time=$(ping -c1 -W1 "$IP" 2>/dev/null | grep 'time=' | sed -n 's/.*time=\(.*\) ms/\1/p')
+    if [[ -n "$ping_time" ]]; then
+      echo -e "${GREEN}✔ $IP:$PORT  Ping: ${ping_time}ms${NC}"
       ((count++))
-      if [ "$count" -ge 300 ]; then break 2; fi
-      sleep 0.1
-    done
+    fi
+    [[ $count -ge 10 ]] && break
   done
-  wait
+
+  [[ $count -eq 0 ]] && echo -e "${RED}❌ No working IPv4 WARP IPs found.${NC}"
 }
 
-# دریافت پروکسی از چند منبع
-get_proxies() {
-  echo -e "\n${CYAN}🌍 Fetching fresh Telegram proxies...${NC}"
-  proxies=""
-  sources=(
-    "https://api.openproxy.space/lists/telegram/all.txt"
-    "https://raw.githubusercontent.com/TheSpeedX/SOCKS-List/master/http.txt"
-    "https://raw.githubusercontent.com/jetkai/proxy-list/main/online-proxies/txt/proxies-http.txt"
-  )
+# Telegram Proxy Fetcher
+telegram_proxy_fetcher() {
+  echo -e "${CYAN}\n🌐 Fetching fresh Telegram proxies...${NC}"
+  sleep 1
 
-  for src in "${sources[@]}"; do
-    tmp=$(curl -s "$src" | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:[0-9]+' | head -n 10)
-    if [[ -n "$tmp" ]]; then
-      proxies+="$tmp"$'\n'
-    fi
-  done
+  response=$(curl -s https://t.me/s/proxy?before=999999)
+  proxies=$(echo "$response" | grep -oE 'tg://proxy\?server=[^"]+' | head -n 10)
 
-  final=$(echo "$proxies" | sort -u | head -n 10)
-  if [[ -z "$final" ]]; then
-    echo -e "${RED}❌ No proxies found.${NC}"
+  if [[ -z "$proxies" ]]; then
+    echo -e "${RED}❌ Failed to fetch proxies.${NC}"
   else
-    echo -e "${GREEN}✔ Found Proxies:${NC}"
-    echo "$final" | nl
+    echo -e "${GREEN}✔ Showing 10 fresh proxies:${NC}"
+    echo "$proxies" | nl -w2 -s'. '
   fi
 }
 
-# منوی اصلی
-main_menu() {
-  clear
-  echo -e "${YELLOW}╔═══════════════════════════════════════╗"
-  echo -e "║        Academi Tool - v1.0.5          ║"
-  echo -e "║  Channel: @Academi_vpn                ║"
-  echo -e "║  Support: @MahdiAGM0                  ║"
-  echo -e "╚═══════════════════════════════════════╝${NC}"
-  echo ""
-  echo -e "${CYAN}1.${NC} WARP IPv4 IP Scanner"
-  echo -e "${CYAN}2.${NC} Telegram Proxy Updater"
-  echo -e "${CYAN}0.${NC} Exit"
-  echo -ne "\nSelect: "; read opt
-
-  case "$opt" in
-    1) warp_scan ;;
-    2) get_proxies ;;
-    0) echo -e "${YELLOW}Bye!${NC}"; exit ;;
-    *) echo -e "${RED}Invalid option.${NC}"; sleep 1 ;;
-  esac
+# Installer
+install_globally() {
+  echo -e "${CYAN}\n📦 Installing Academi_warp as global command...${NC}"
+  curl -fsSL https://raw.githubusercontent.com/Academivpn73/Academi-warp1/main/warp.sh -o $PREFIX/bin/Academi_warp
+  chmod +x $PREFIX/bin/Academi_warp
+  echo -e "${GREEN}✔ Installed! Now you can run with: ${YELLOW}Academi_warp${NC}\n"
 }
 
-# اجرای برنامه
-install_deps
-while true; do main_menu; echo -e "\nPress enter to return to menu..."; read; done
+# Main Menu
+main_menu() {
+  clear
+  echo -e "${YELLOW}Academi Warp Tool ${NC} - ${CYAN}Version $VERSION${NC}"
+  echo -e "${GREEN}Channel:${NC} $CHANNEL   ${GREEN}Support:${NC} $ADMIN"
+  echo -e "\n${CYAN}Select an option:${NC}"
+  echo -e "${CYAN}1.${NC} WARP IP Scanner"
+  echo -e "${CYAN}2.${NC} Telegram Proxy List"
+  echo -e "${CYAN}3.${NC} Install as Command (Academi_warp)"
+  echo -e "${CYAN}0.${NC} Exit"
+  echo -ne "\n${YELLOW}>>> ${NC}"
+  read choice
+
+  case $choice in
+    1) warp_ipv4_scanner ;;
+    2) telegram_proxy_fetcher ;;
+    3) install_globally ;;
+    0) echo -e "${GREEN}Bye.${NC}"; exit ;;
+    *) echo -e "${RED}❌ Invalid option.${NC}" ;;
+  esac
+
+  echo -e "\n${CYAN}Press Enter to return to menu...${NC}"
+  read
+  main_menu
+}
+
+install_dependencies
+main_menu
