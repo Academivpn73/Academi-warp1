@@ -1,113 +1,130 @@
 #!/bin/bash
 
-# ========= INFO =========
-VERSION="1.3.1"
+# ───────────── Title Info ─────────────
+VERSION="1.2.1"
 ADMIN="@MahdiAGM0"
-CHANNEL="@Academi_vpn"
-ALIAS_NAME="Academivpn_warp"
+CHANNEL="@AcademiVPN"
+TITLE="AcademiVPN WARP Tool v$VERSION"
 
-# ========= COLORS =========
-GREEN="\e[92m"
-RED="\e[91m"
-CYAN="\e[96m"
-YELLOW="\e[93m"
+# ───────────── Colors ─────────────
+GREEN="\e[32m"
+RED="\e[31m"
+CYAN="\e[36m"
+YELLOW="\e[33m"
 RESET="\e[0m"
 
-# ========= INSTALL DEPENDENCIES =========
-install_deps() {
-    echo -e "${CYAN}Installing dependencies...${RESET}"
-    pkg update -y > /dev/null 2>&1 || apt update -y > /dev/null 2>&1
-    pkg install curl wget jq coreutils -y > /dev/null 2>&1 || apt install curl wget jq coreutils -y > /dev/null 2>&1
+# ───────────── Install Requirements ─────────────
+install_requirements() {
+    echo -e "${CYAN}[+] Installing required packages...${RESET}"
+    pkg update -y > /dev/null 2>&1
+    pkg install curl wget jq -y > /dev/null 2>&1
+    echo -e "${GREEN}[✓] Requirements installed.${RESET}"
 }
 
-# ========= HEADER =========
-show_header() {
-    clear
-    echo -e "${YELLOW}=========================================="
-    echo -e "  AcademiVPN Panel v$VERSION"
-    echo -e "  Admin: $ADMIN"
-    echo -e "  Channel: $CHANNEL"
-    echo -e "==========================================${RESET}"
-}
-
-# ========= WARP IP SCANNER =========
-warp_ranges=("162.159.192" "162.159.193" "188.114.96" "104.16.0" "104.17.0")
-
-scan_warp_ips() {
-    echo -e "${CYAN}Scanning WARP IPv4 IPs...${RESET}"
-    count=0
-    for range in "${warp_ranges[@]}"; do
-        for i in $(shuf -i 1-254 -n 2); do
-            ip="$range.$i"
-            port=$(shuf -i 1-65535 -n 1)
-            ping_result=$(ping -c 1 -W 1 $ip 2>/dev/null)
-            if echo "$ping_result" | grep -q "time="; then
-                ping_ms=$(echo "$ping_result" | grep 'time=' | awk -F"time=" '{print $2}' | cut -d' ' -f1)
-                echo -e "${GREEN}$ip:$port  -> Ping: ${ping_ms}ms${RESET}"
-                count=$((count+1))
-                [[ $count -eq 10 ]] && return
-            fi
-        done
-    done
-    [[ $count -eq 0 ]] && echo -e "${RED}❌ No active IPs found.${RESET}"
-}
-
-# ========= TELEGRAM PROXIES =========
+# ───────────── Enhanced Proxy Fetcher ─────────────
 fetch_proxies() {
-    echo -e "${CYAN}Fetching Telegram proxies...${RESET}"
-    response=$(curl -s https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/tg.txt)
-    if [[ -z "$response" ]]; then
-        echo -e "${RED}❌ Failed to fetch proxies.${RESET}"
-        return
+    echo -e "${CYAN}Fetching Telegram proxies from global sources...${RESET}"
+
+    sources=(
+        "https://raw.githubusercontent.com/TheSpeedX/SOCKS-List/master/socks5.txt"
+        "https://raw.githubusercontent.com/jetkai/proxy-list/main/online-proxies/txt/proxy-list-socks5.txt"
+        "https://raw.githubusercontent.com/hookzof/socks5_list/master/proxy.txt"
+        "https://raw.githubusercontent.com/ShiftyTR/Proxy-List/master/socks5.txt"
+        "https://raw.githubusercontent.com/roosterkid/openproxylist/main/SOCKS5_RAW.txt"
+        "https://raw.githubusercontent.com/clarketm/proxy-list/master/proxy-list-raw.txt"
+        "https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/socks5.txt"
+        "https://raw.githubusercontent.com/rdavydov/proxy-list/main/proxies/socks5.txt"
+        "https://raw.githubusercontent.com/mmpx12/proxy-list/master/socks5.txt"
+        "https://raw.githubusercontent.com/Zaeem20/FREE_PROXIES_LIST/master/socks5.txt"
+        # اضافه کن هر تعداد دیگه‌ای که خواستی...
+    )
+
+    all_proxies=""
+    for src in "${sources[@]}"; do
+        temp=$(curl -s --max-time 10 "$src" | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}:[0-9]{2,5}')
+        [[ -n "$temp" ]] && all_proxies+=$'\n'"$temp"
+    done
+
+    unique_proxies=$(echo "$all_proxies" | grep -v '^$' | sort -u | shuf | head -n 10)
+
+    if [[ -z "$unique_proxies" ]]; then
+        echo -e "${RED}❌ No proxies found.${RESET}"
+    else
+        echo -e "${GREEN}✅ Top 10 Telegram Proxies:${RESET}"
+        echo "$unique_proxies"
     fi
-    proxies=$(echo "$response" | shuf | head -n 10)
-    echo -e "${GREEN}✅ Top 10 Telegram Proxies:${RESET}"
-    echo "$proxies"
 }
 
-# ========= INSTALL LAUNCHER =========
-install_installer() {
-    echo -e "${CYAN}Installing launcher...${RESET}"
-    chmod +x warp.sh
-    cp warp.sh /data/data/com.termux/files/usr/bin/$ALIAS_NAME 2>/dev/null || sudo cp warp.sh /usr/local/bin/$ALIAS_NAME
-    chmod +x /data/data/com.termux/files/usr/bin/$ALIAS_NAME 2>/dev/null || sudo chmod +x /usr/local/bin/$ALIAS_NAME
-    echo -e "${GREEN}✅ Installed! Run with: ${YELLOW}$ALIAS_NAME${RESET}"
-    exit 0
-}
+# ───────────── Warp Scanner ─────────────
+scan_warp_ips() {
+    echo -e "${CYAN}Scanning WARP IPs from Cloudflare ranges...${RESET}"
 
-# ========= REMOVE INSTALLER =========
-remove_installer() {
-    echo -e "${CYAN}Removing launcher...${RESET}"
-    rm -f /data/data/com.termux/files/usr/bin/$ALIAS_NAME 2>/dev/null || sudo rm -f /usr/local/bin/$ALIAS_NAME
-    echo -e "${GREEN}✅ Removed launcher.${RESET}"
-    exit 0
-}
+    ipv4_ranges=(
+        "162.159.192.0"
+        "188.114.96.0"
+        "104.28.0.0"
+        "198.41.192.0"
+    )
 
-# ========= MAIN MENU =========
-main_menu() {
-    while true; do
-        show_header
-        echo -e "${CYAN}1) WARP IP Scanner"
-        echo -e "2) Telegram Proxy Fetcher"
-        echo -e "3) Install Launcher ($ALIAS_NAME)"
-        echo -e "4) Remove Launcher"
-        echo -e "5) Exit${RESET}"
-        read -p $'\nChoose an option: ' opt
+    for i in {1..10}; do
+        base_ip=${ipv4_ranges[$((RANDOM % ${#ipv4_ranges[@]}))]}
+        ip=$(echo $base_ip | awk -F. -v r=$((RANDOM % 255)) '{$4=r; print $1"."$2"."$3"."$4}')
+        port=$((RANDOM % 65535 + 1))
 
-        case $opt in
-            1) scan_warp_ips ;;
-            2) fetch_proxies ;;
-            3) install_installer ;;
-            4) remove_installer ;;
-            5) echo -e "${YELLOW}Bye.${RESET}"; exit 0 ;;
-            *) echo -e "${RED}Invalid option.${RESET}" ;;
-        esac
-
-        echo -e "\nPress Enter to return..."
-        read
+        ping -c 1 -W 1 "$ip" > /dev/null 2>&1
+        if [[ $? -eq 0 ]]; then
+            echo -e "${GREEN}✓ $ip:$port is responsive${RESET}"
+        else
+            echo -e "${YELLOW}- $ip:$port is not responsive${RESET}"
+        fi
     done
 }
 
-# ========= RUN =========
-install_deps
+# ───────────── Installer Shortcut ─────────────
+install_installer() {
+    echo -e "${CYAN}Installing launcher command...${RESET}"
+    echo "bash $(realpath $0)" > $PREFIX/bin/Academivpn_warp
+    chmod +x $PREFIX/bin/Academivpn_warp
+    echo -e "${GREEN}✓ Now you can run with: ${YELLOW}Academivpn_warp${RESET}"
+}
+
+remove_installer() {
+    rm -f $PREFIX/bin/Academivpn_warp
+    echo -e "${RED}✘ Launcher removed. Use bash warp.sh to run manually.${RESET}"
+}
+
+# ───────────── Main Menu ─────────────
+main_menu() {
+    clear
+    echo -e "${CYAN}╔══════════════════════════════════════╗"
+    echo -e "║   ${TITLE}   ║"
+    echo -e "╠══════════════════════════════════════╣"
+    echo -e "║ Admin:  ${YELLOW}${ADMIN}${CYAN}               ║"
+    echo -e "║ Channel:${YELLOW}${CHANNEL}${CYAN}              ║"
+    echo -e "╚══════════════════════════════════════╝${RESET}"
+
+    echo -e "
+1) Install Requirements
+2) Show Telegram Proxies
+3) Scan WARP IPs
+4) Install Shortcut (Academivpn_warp)
+5) Remove Shortcut
+0) Exit
+"
+
+    read -p "Select an option: " opt
+    case "$opt" in
+        1) install_requirements ;;
+        2) fetch_proxies ;;
+        3) scan_warp_ips ;;
+        4) install_installer ;;
+        5) remove_installer ;;
+        0) exit 0 ;;
+        *) echo -e "${RED}Invalid option.${RESET}";;
+    esac
+
+    read -p "Press Enter to return..." && main_menu
+}
+
+# ───────────── Run ─────────────
 main_menu
