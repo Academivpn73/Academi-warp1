@@ -1,115 +1,104 @@
-#!/bin/bash
+#!/data/data/com.termux/files/usr/bin/bash
 
-# ════[ رنگ‌ها ]════
-GREEN="\e[32m"
-RED="\e[31m"
-CYAN="\e[36m"
-YELLOW="\e[33m"
-NC="\e[0m"
+# ════ Academi WARP Toolkit v1.1.0 ════
+VERSION="1.1.0"
+CHANNEL="@Academi_vpn"
+ADMIN="@MahdiAGM0"
 
-# ════[ هدر ]════
-clear
-echo -e "${CYAN}╔════════════════════════════════════════════════════╗"
-echo -e "║     ${GREEN}Academi WARP Toolkit ${YELLOW}v1.1.0${CYAN}                  ║"
-echo -e "║ ${NC}Channel: @Academi_vpn   ${CYAN}Support: @MahdiAGM0        ║"
-echo -e "╚════════════════════════════════════════════════════╝${NC}"
-echo ""
+GREEN="\e[32m"; RED="\e[31m"; CYAN="\e[36m"; YELLOW="\e[33m"; NC="\e[0m"
 
-# ════[ نصب ابزارها ]════
 install_dependencies() {
-  echo -e "${YELLOW}🔧 Installing requirements...${NC}"
+  echo -e "${YELLOW}🔧 در حال نصب ابزارهای مورد نیاز...${NC}"
   pkg update -y >/dev/null 2>&1
-  pkg install curl jq wireguard -y >/dev/null 2>&1
+  pkg install -y curl jq wireguard >/dev/null 2>&1
   if ! command -v wgcf &>/dev/null; then
-    curl -sL https://github.com/ViRb3/wgcf/releases/latest/download/wgcf_$(uname -m | sed 's/aarch64/arm64/;s/armv7l/armv6l/') -o wgcf
+    wget -qO wgcf "https://github.com/ViRb3/wgcf/releases/latest/download/wgcf_$(uname -m | sed 's/aarch64/arm64/;s/armv7l/armv6l/')"
     chmod +x wgcf
     mv wgcf /data/data/com.termux/files/usr/bin/
   fi
 }
 
-# ════[ بخش پروکسی تلگرام ]════
 telegram_proxy_fetcher() {
-  echo -e "${CYAN}\n🌐 Fetching fresh Telegram proxies...${NC}"
+  echo -e "${CYAN}\n🌐 در حال بارگذاری پروکسی‌های تلگرام...${NC}"
   sources=(
     "https://raw.githubusercontent.com/hookzof/socks5_list/master/tg/mtproto.txt"
-    "https://raw.githubusercontent.com/ejnv/freemtproto/main/proxies.txt"
+    "https://raw.githubusercontent.com/TheSpeedX/TBomb/master/core/proxies/mtproto.txt"
   )
   for url in "${sources[@]}"; do
     proxies=$(curl -s --max-time 5 "$url" | grep '^tg://' | head -n 10)
     if [[ -n "$proxies" ]]; then
-      echo -e "${GREEN}✔ Found proxies from $url:${NC}"
+      echo -e "${GREEN}✔ پروکسی‌های سالم از $url:${NC}"
       echo "$proxies" | nl -w2 -s'. '
       return
     fi
   done
-  echo -e "${RED}❌ No working proxies found.${NC}"
+  echo -e "${RED}❌ پروکسی‌ی سالمی یافت نشد.${NC}"
 }
 
-# ════[ بخش اسکن WARP IP ]════
 warp_scanner() {
-  echo -e "${CYAN}\n🔍 Scanning best WARP IPv4 IPs...${NC}"
-  cidr_blocks=("162.159.192.0/24" "188.114.96.0/24")
-  ips=()
-  while [[ ${#ips[@]} -lt 10 ]]; do
-    cidr=${cidr_blocks[$RANDOM % ${#cidr_blocks[@]}]}
-    base=$(echo "$cidr" | cut -d'/' -f1 | cut -d'.' -f1-3)
-    for i in $(seq 1 254); do
+  echo -e "${CYAN}\n🔍 اسکن IPهای واقعی WARP IPv4...${NC}"
+  cidr_blocks=("162.159.192.0/24" "162.159.193.0/24" "162.159.195.0/24" "188.114.96.0/24" "188.114.97.0/24")
+  found=0
+  while [[ $found -lt 10 ]]; do
+    block=${cidr_blocks[$RANDOM % ${#cidr_blocks[@]}]}
+    base=$(echo "$block" | cut -d'/' -f1 | cut -d'.' -f1-3)
+    for i in $(shuf -i 1-254 -n 15); do
       ip="${base}.${i}"
-      port=$((RANDOM % 65535 + 1))
-      ping=$(ping -c 1 -W 1 $ip | grep 'time=' | awk -F'time=' '{print $2}' | cut -d' ' -f1)
-      if [[ -n "$ping" ]]; then
-        echo -e "${GREEN}✔ $ip:$port  Ping: ${ping}ms${NC}"
-        ips+=("$ip:$port")
-        if [[ ${#ips[@]} -ge 10 ]]; then break; fi
+      port=$(( (RANDOM % 65535) + 1 ))
+      ping_ms=$(ping -c1 -W1 "$ip" 2>/dev/null | grep 'time=' | awk -F'time=' '{print $2}' | cut -d' ' -f1)
+      if [[ -n "$ping_ms" ]]; then
+        echo -e "${GREEN}✔ $ip:$port  Ping: ${ping_ms}ms${NC}"
+        ((found++))
+        break
       fi
     done
-    [[ ${#ips[@]} -ge 10 ]] && break
   done
-  [[ ${#ips[@]} -eq 0 ]] && echo -e "${RED}❌ No responsive IPs found.${NC}"
 }
 
-# ════[ ساخت کانفیگ واقعی وایرگارد ]════
 generate_wireguard_config() {
-  echo -e "${CYAN}\n🛠 Generating real WireGuard config via Cloudflare...${NC}"
-  mkdir -p ~/wg_academi
-  cd ~/wg_academi || return
+  echo -e "${CYAN}\n🛠 در حال ساخت کانفیگ WireGuard واقعی...${NC}"
+  mkdir -p "$HOME/wg_academi"
+  cd "$HOME/wg_academi" || return
   wgcf register --accept-tos >/dev/null 2>&1
   wgcf generate >/dev/null 2>&1
   if [[ -f wgcf-profile.conf ]]; then
-    echo -e "${GREEN}✔ WireGuard config generated at ~/wg_academi/wgcf-profile.conf${NC}"
-    echo ""
-    cat wgcf-profile.conf | grep -v '^#' | head -n 20
+    echo -e "${GREEN}✔ کانفیگ ساخته‌شد در:${NC} $HOME/wg_academi/wgcf-profile.conf"
+    echo -e "\n----- نمایشی از کانفیگ (۲۰ خط اول) -----\n"
+    head -n 20 wgcf-profile.conf
   else
-    echo -e "${RED}❌ Failed to generate config.${NC}"
+    echo -e "${RED}❌ ساخت کانفیگ ناموفق بود.${NC}"
   fi
 }
 
-# ════[ منوی اصلی ]════
+installer_setup() {
+  chmod +x "$0"
+  cp "$0" /data/data/com.termux/files/usr/bin/Academi_warp 2>/dev/null
+  echo -e "${GREEN}✔ دستور Academi_warp نصب شد. حالا فقط تایپ کن:${NC} Academi_warp"
+}
+
 main_menu() {
-  echo -e "\n${CYAN}Select an option:${NC}"
-  echo -e " 1️⃣  WARP IPv4 Scanner"
-  echo -e " 2️⃣  Telegram Proxies"
-  echo -e " 3️⃣  Generate Real WireGuard Config"
-  echo -e " 0️⃣  Exit"
-  echo -en "${YELLOW}\nEnter choice: ${NC}"
+  clear
+  echo -e "${YELLOW}Academi WARP Toolkit v${VERSION}${NC}"
+  echo -e "${CYAN}Channel:${NC} ${CHANNEL}   ${CYAN}Support:${NC} ${ADMIN}"
+  echo ""
+  echo -e "${CYAN}1) WARP IPv4 Scanner"
+  echo -e "2) Telegram Proxy List"
+  echo -e "3) Generate Real WireGuard Config"
+  echo -e "0) Exit"
+  echo -en "\n${YELLOW}>>> ${NC}"
   read choice
-  case $choice in
+  case "$choice" in
     1) warp_scanner ;;
     2) telegram_proxy_fetcher ;;
     3) generate_wireguard_config ;;
     0) exit 0 ;;
-    *) echo -e "${RED}❌ Invalid choice!${NC}" && sleep 1 && main_menu ;;
+    *) echo -e "${RED}❌ انتخاب نامعتبر!${NC}"; sleep 1 ;;
   esac
+  echo -e "\n${CYAN}Press Enter to return to menu...${NC}"
+  read
+  main_menu
 }
 
-# ════[ نصب شورتکات ]════
-installer_setup() {
-  chmod +x "$0"
-  cp "$0" /data/data/com.termux/files/usr/bin/Academi_warp 2>/dev/null
-  echo -e "${GREEN}✔ You can now run this script with: ${CYAN}Academi_warp${NC}"
-}
-
-# ════[ اجرا ]════
 install_dependencies
 installer_setup
 main_menu
