@@ -1,109 +1,123 @@
-#!/bin/bash
+#!/data/data/com.termux/files/usr/bin/bash
 
-# 🌐 AcademiVPN Warp Panel | Version 1.3.0
-# Channel: @AcademiVPN | Support: @MahdiAGM0
-
-# 🎨 Colors
+# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 CYAN='\033[0;36m'
 YELLOW='\033[1;33m'
 RESET='\033[0m'
 
-# 🧱 Install required packages
-install_dependencies() {
-  pkgs=(curl grep sed jq)
-  for pkg in "${pkgs[@]}"; do
-    if ! command -v "$pkg" >/dev/null 2>&1; then
-      echo -e "${YELLOW}[INFO] Installing $pkg...${RESET}"
-      pkg install -y "$pkg" 2>/dev/null || apt install -y "$pkg"
+# Info
+VERSION="1.0.5"
+CHANNEL="@AcademiVpn"
+ADMIN="@MahdiAGM0"
+
+# Installer command alias
+INSTALLER_CMD="Academivpn_warp"
+
+# Auto requirements
+auto_install_requirements() {
+  echo -e "${CYAN}Installing required packages...${RESET}"
+  pkg update -y > /dev/null
+  pkg install -y curl jq grep coreutils > /dev/null
+}
+
+# Create installer
+create_installer() {
+  echo -e "${GREEN}Creating installer command: ${INSTALLER_CMD}${RESET}"
+  cat > "/data/data/com.termux/files/usr/bin/$INSTALLER_CMD" <<- EOF
+#!/data/data/com.termux/files/usr/bin/bash
+bash ~/warp.sh
+EOF
+  chmod +x "/data/data/com.termux/files/usr/bin/$INSTALLER_CMD"
+  echo -e "${GREEN}✅ Installer created. Run using '${INSTALLER_CMD}'${RESET}"
+}
+
+# Remove installer
+remove_installer() {
+  rm -f "/data/data/com.termux/files/usr/bin/$INSTALLER_CMD"
+  echo -e "${RED}❌ Installer removed.${RESET}"
+}
+
+# Telegram Proxy Section
+fetch_proxies() {
+  echo -e "${CYAN}Fetching Telegram MTProto proxies...${RESET}"
+
+  sources=(
+    "https://raw.githubusercontent.com/hookzof/socks5_list/master/proxy.txt"
+    "https://raw.githubusercontent.com/zaaero/proxy-list/main/telegram.txt"
+    "https://raw.githubusercontent.com/hookzof/proxy-list/master/mtproto.txt"
+    "https://raw.githubusercontent.com/shellhub/tg-proxy-list/main/list.txt"
+  )
+
+  all_proxies=""
+  for src in "${sources[@]}"; do
+    if curl --head --silent --fail "$src" > /dev/null; then
+      content=$(curl -s --max-time 10 "$src")
+      matches=$(echo "$content" | grep -Eo 'tg://proxy\?server=.*?(&port=.*?)?(&secret=.*?)?')
+      [[ -n "$matches" ]] && all_proxies+=$'\n'"$matches"
+    fi
+  done
+
+  valid=$(echo "$all_proxies" | grep '^tg://' | sort -u | shuf | head -n 10)
+
+  if [[ -z "$valid" ]]; then
+    echo -e "${RED}❌ No valid Telegram proxies found.${RESET}"
+  else
+    echo -e "${GREEN}✅ Top 10 Telegram Proxies:${RESET}"
+    echo "$valid"
+  fi
+}
+
+# WARP IP Scanner
+scan_warp_ips() {
+  echo -e "${CYAN}Scanning WARP IPs & Ports...${RESET}"
+
+  BASES=("104.16" "162.159" "188.114" "198.41" "172.67")
+  PORTS=(80 443 8080 8443 2052 2053 2082 2083 2086 2095 2096 8880)
+
+  for i in $(seq 1 10); do
+    base=${BASES[$RANDOM % ${#BASES[@]}]}
+    ip="$base.$((RANDOM % 256)).$((RANDOM % 256))"
+    port=${PORTS[$RANDOM % ${#PORTS[@]}]}
+    ping_ms=$(ping -c1 -W1 "$ip" | grep 'time=' | sed -E 's/.*time=([0-9.]+).*/\1 ms/')
+
+    if [[ -n "$ping_ms" ]]; then
+      echo -e "${GREEN}IP: $ip:$port    Ping: $ping_ms${RESET}"
+    else
+      echo -e "${RED}IP: $ip:$port    ❌ Unreachable${RESET}"
     fi
   done
 }
 
-# 📦 Install launcher
-install_launcher() {
-  cp "$0" /data/data/com.termux/files/usr/bin/Academivpn_warp 2>/dev/null || cp "$0" /usr/local/bin/Academivpn_warp
-  chmod +x /data/data/com.termux/files/usr/bin/Academivpn_warp 2>/dev/null || chmod +x /usr/local/bin/Academivpn_warp
-  echo -e "${GREEN}✅ Installed launcher: Academivpn_warp${RESET}"
-}
-
-# ❌ Remove launcher
-remove_launcher() {
-  rm -f /data/data/com.termux/files/usr/bin/Academivpn_warp /usr/local/bin/Academivpn_warp
-  echo -e "${RED}❌ Removed launcher: Academivpn_warp${RESET}"
-}
-
-# 🌐 Telegram Proxy Fetcher
-fetch_proxies() {
-  echo -e "${CYAN}Fetching fresh Telegram MTProto proxies...${RESET}"
-
-  sources=(
-    "https://raw.githubusercontent.com/hookzof/socks5_list/master/proxy.txt"
-    "https://raw.githubusercontent.com/Azd325/Telegram-Proxy/master/tg.txt"
-    "https://raw.githubusercontent.com/shellhub/tg-proxy-list/main/list.txt"
-    "https://raw.githubusercontent.com/zaaero/proxy-list/main/telegram.txt"
-    "https://raw.githubusercontent.com/hookzof/proxy-list/master/mtproto.txt"
-  )
-
-  proxies=""
-  for src in "${sources[@]}"; do
-    temp=$(curl -s --max-time 10 "$src" | grep -Eo 'tg://proxy\?server=.*?(&port=.*?)?(&secret=.*?)?' || true)
-    [[ -n "$temp" ]] && proxies+=$'\n'"$temp"
-  done
-
-  final=$(echo "$proxies" | grep '^tg://' | sort -u | shuf | head -n 10)
-
-  if [[ -z "$final" ]]; then
-    echo -e "${RED}❌ Failed to fetch MTProto proxies.${RESET}"
-  else
-    echo -e "${GREEN}✅ Top 10 Telegram Proxies:${RESET}"
-    echo "$final"
-  fi
-}
-
-# 🔍 WARP IP Scanner (Simulated, randomized)
-warp_scanner() {
-  echo -e "${CYAN}Generating random Cloudflare WARP IPs...${RESET}"
-  for i in {1..10}; do
-    ip="162.$((RANDOM % 255)).$((RANDOM % 255)).$((RANDOM % 255))"
-    port=$((RANDOM % 65535 + 1))
-    echo -e "${GREEN}➤ $ip:$port${RESET}"
-  done
-}
-
-# 📋 Main menu
+# Main Menu
 main_menu() {
   clear
-  echo -e "${CYAN}┌──────────────────────────────────────────┐"
-  echo -e "${CYAN}│    AcademiVPN WARP Panel - v1.3.0        │"
-  echo -e "${CYAN}├──────────────────────────────────────────┤"
-  echo -e "${CYAN}│ Channel: @AcademiVPN                     │"
-  echo -e "${CYAN}│ Support: @MahdiAGM0                      │"
-  echo -e "${CYAN}└──────────────────────────────────────────┘${RESET}"
+  echo -e "${YELLOW}Academi VPN WARP Panel  |  Version: $VERSION${RESET}"
+  echo -e "${CYAN}Channel: $CHANNEL   Admin: $ADMIN${RESET}"
   echo
-  echo -e "${YELLOW}[1]${RESET} Get Telegram MTProto Proxies"
-  echo -e "${YELLOW}[2]${RESET} Generate Random WARP IPs"
-  echo -e "${YELLOW}[3]${RESET} Install 'Academivpn_warp' Launcher"
-  echo -e "${YELLOW}[4]${RESET} Remove 'Academivpn_warp'"
-  echo -e "${YELLOW}[5]${RESET} Exit"
+  echo -e "${GREEN}[1]${RESET} Telegram Proxy Scraper"
+  echo -e "${GREEN}[2]${RESET} WARP IP Scanner"
+  echo -e "${GREEN}[3]${RESET} Install Installer Command"
+  echo -e "${GREEN}[4]${RESET} Remove Installer Command"
+  echo -e "${GREEN}[0]${RESET} Exit"
   echo
-  read -p $'\033[1;36mSelect an option: \033[0m' choice
+  read -p "Select: " choice
 
   case "$choice" in
     1) fetch_proxies ;;
-    2) warp_scanner ;;
-    3) install_launcher ;;
-    4) remove_launcher ;;
-    5) exit 0 ;;
-    *) echo -e "${RED}Invalid choice.${RESET}" ;;
+    2) scan_warp_ips ;;
+    3) create_installer ;;
+    4) remove_installer ;;
+    0) exit ;;
+    *) echo -e "${RED}Invalid option.${RESET}" ;;
   esac
 
   echo
-  read -p "Press Enter to return to menu..."
+  read -p "Press enter to return to menu..." dummy
   main_menu
 }
 
-# 🚀 Start script
-install_dependencies
+# Initial setup
+auto_install_requirements
 main_menu
