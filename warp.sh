@@ -1,9 +1,8 @@
-#!/bin/bash
+#!/data/data/com.termux/files/usr/bin/bash
 
 VERSION="1.2.0"
 ALIAS_PATH="/data/data/com.termux/files/usr/bin/Academi_warp"
 
-# رنگ‌ها
 GREEN="\033[0;32m"
 CYAN="\033[0;36m"
 YELLOW="\033[1;33m"
