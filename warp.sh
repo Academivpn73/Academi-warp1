@@ -2,115 +2,130 @@
 
 ADMIN="@MahdiAGM0"
 CHANNEL="@Academi_vpn"
-VERSION="1.6.3"
-PROXY_FILE="$HOME/academi_proxies.txt"
+VERSION="1.6.4"
+PROXY_FILE="$HOME/.academi_proxies.txt"
+LAST_UPDATE_FILE="$HOME/.proxy_update_time"
+
+# 🎨 Colors
+RED='\033[1;31m'
+GREEN='\033[1;32m'
+BLUE='\033[1;34m'
+CYAN='\033[1;36m'
+YELLOW='\033[1;33m'
+RESET='\033[0m'
 
 # 🧩 Dependencies
 check_deps() {
-  for cmd in curl jq ping; do
+  for cmd in curl jq ping timeout; do
     if ! command -v $cmd &>/dev/null; then
       pkg install -y $cmd
     fi
   done
 }
 
-# ✅ INSTALLER
+# 📦 Launcher
 install_launcher() {
   cp "$0" "$PREFIX/bin/Academivpn_warp"
   chmod +x "$PREFIX/bin/Academivpn_warp"
-  echo "✅ Installed launcher: Academivpn_warp"
+  echo -e "${GREEN}✅ Installed launcher: Academivpn_warp${RESET}"
 }
 
 remove_launcher() {
   rm -f "$PREFIX/bin/Academivpn_warp"
-  echo "✅ Removed launcher"
+  echo -e "${RED}✅ Removed launcher${RESET}"
 }
 
-# 🔁 Update proxies daily
-daily_cron() {
-  (crontab -l 2>/dev/null; echo "0 4 * * * bash '$0' --update-proxies") | crontab -
-  echo "✅ Daily proxy update enabled"
-}
-
-# 🌍 Random IPv4 generator
+# 🌐 Random IP Generator
 random_ipv4() {
   echo "$((RANDOM%256)).$((RANDOM%256)).$((RANDOM%256)).$((RANDOM%256))"
 }
 
-# 🚀 WARP IP Scanner (Mocked Random IPs)
+# 🔍 WARP Scanner
 scan_warp() {
-  echo "🔍 Scanning random IPs from public range..."
+  echo -e "${CYAN}🔍 Scanning WARP IPs...${RESET}"
   count=0
   while [ $count -lt 10 ]; do
     ip=$(random_ipv4)
     port=$((RANDOM % 65535 + 1))
-    pingm=$(ping -c1 -W1 "$ip" 2>/dev/null | grep time= | awk -F'time=' '{print $2}' | cut -d' ' -f1)
+    pingm=$(ping -c1 -W1 "$ip" 2>/dev/null | grep 'time=' | awk -F'time=' '{print $2}' | cut -d' ' -f1)
     if [[ -n "$pingm" ]]; then
-      echo "IP: $ip:$port  ping=${pingm}ms"
+      echo -e "${GREEN}IP: $ip:$port    ping=${pingm}ms${RESET}"
       ((count++))
     fi
   done
 }
 
-# 🌐 Fetch Telegram proxies from multiple sources
+# 🔁 Proxy Update
 fetch_proxies() {
-  echo "⏬ Fetching fresh proxies..."
-  curl -s https://raw.githubusercontent.com/TelegramMessenger/MTProxy/master/proxy_list.json | jq -r '.[]|"\(.host):\(.port)"' 2>/dev/null >>"$PROXY_FILE"
-  curl -s https://raw.githubusercontent.com/ejabberd-contrib/proxy-list/main/mtproto.json | jq -r '.[]|"\(.host):\(.port)"' 2>/dev/null >>"$PROXY_FILE"
-  curl -s https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/telegram.txt >>"$PROXY_FILE"
-  sort -u "$PROXY_FILE" -o "$PROXY_FILE"
+  echo -e "${YELLOW}⏬ Fetching Telegram proxies...${RESET}"
+  > "$PROXY_FILE"
+  curl -s https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/telegram.txt >> "$PROXY_FILE"
+  curl -s https://raw.githubusercontent.com/ejabberd-contrib/proxy-list/main/mtproto.json |
+    jq -r '.[]|"\(.host):\(.port)"' 2>/dev/null >> "$PROXY_FILE"
+  grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}:[0-9]{2,5}' "$PROXY_FILE" | sort -u > "$PROXY_FILE.tmp"
+  mv "$PROXY_FILE.tmp" "$PROXY_FILE"
+  date +%s > "$LAST_UPDATE_FILE"
 }
 
-# 🧪 Show Top 10 Working Proxies
+check_proxy_update() {
+  now=$(date +%s)
+  last=$(cat "$LAST_UPDATE_FILE" 2>/dev/null || echo 0)
+  diff=$(( (now - last) / 3600 ))
+  if (( diff >= 24 )); then
+    fetch_proxies
+  fi
+}
+
 show_proxies() {
+  check_proxy_update
   [[ ! -f "$PROXY_FILE" ]] && fetch_proxies
-  echo "🔌 Showing top 10 working proxies:"
+  echo -e "${CYAN}📡 Top 10 Telegram Proxies:${RESET}"
   count=1
   shuf "$PROXY_FILE" | head -n 50 | while read proxy; do
     ip=${proxy%%:*}
-    pingm=$(ping -c1 -W1 "$ip" 2>/dev/null | grep time= | awk -F'time=' '{print $2}' | cut -d' ' -f1)
+    pingm=$(timeout 1 ping -c1 "$ip" 2>/dev/null | grep 'time=' | awk -F'time=' '{print $2}' | cut -d' ' -f1)
     if [[ -n "$pingm" ]]; then
-      echo "Proxy $count: $proxy  ping=${pingm}ms"
+      echo -e "${BLUE}Proxy $count:${RESET} $proxy   ${GREEN}ping=${pingm}ms${RESET}"
       ((count++))
     fi
     [[ $count -gt 10 ]] && break
   done
+  [[ $count -eq 1 ]] && echo -e "${RED}❌ No working proxies found.${RESET}"
 }
 
+# 🎯 Header
 print_header() {
   clear
-  echo "============================================"
-  echo "   🎯 AcademiVPN Tool — Version: $VERSION"
-  echo "   📢 Telegram: $CHANNEL"
-  echo "   🛠️ Admin: $ADMIN"
-  echo "============================================"
+  echo -e "${CYAN}"
+  echo "╔════════════════════════════════════════════════════╗"
+  echo "║               🎯  AcademiVPN Terminal              ║"
+  echo "╠════════════════════════════════════════════════════╣"
+  echo "║ 📢 Telegram: ${CHANNEL}                     ║"
+  echo "║ 👤 Admin   : ${ADMIN}                        ║"
+  echo "║ 🧪 Version : ${VERSION}                                ║"
+  echo "╚════════════════════════════════════════════════════╝"
+  echo -e "${RESET}"
 }
 
-# 📅 --update-proxies (for CRON)
-if [[ "$1" == "--update-proxies" ]]; then
-  fetch_proxies
-  exit 0
-fi
-
-# ⚙️ Main Menu
+# 🧭 Menu
 check_deps
 while true; do
   print_header
-  echo "1) Install Launcher        (Academivpn_warp)"
-  echo "2) Remove Launcher"
-  echo "3) WARP IP Scanner (10)"
-  echo "4) Telegram Proxies (10)"
-  echo "5) Enable daily proxy update"
-  echo "0) Exit"
-  read -p "Choose: " opt
+  echo -e "${YELLOW}1)${RESET} 🧱 Install Launcher        (${GREEN}Academivpn_warp${RESET})"
+  echo -e "${YELLOW}2)${RESET} 🧹 Remove Launcher"
+  echo -e "${YELLOW}3)${RESET} 🔍 WARP IP Scanner (10 IP:PORT)"
+  echo -e "${YELLOW}4)${RESET} 📡 Telegram Proxies (10 Working)"
+  echo -e "${YELLOW}0)${RESET} ❌ Exit"
+  echo ""
+  read -p "💡 Choose an option: " opt
   case "$opt" in
     1) install_launcher ;;
     2) remove_launcher ;;
     3) scan_warp ;;
     4) show_proxies ;;
-    5) daily_cron ;;
-    0) echo "Goodbye!"; exit ;;
-    *) echo "❌ Invalid option!" ;;
+    0) echo -e "${RED}Goodbye!${RESET}"; exit ;;
+    *) echo -e "${RED}❌ Invalid choice!${RESET}" ;;
   esac
-  echo "Press Enter..."; read
+  echo ""
+  read -p "🔁 Press Enter to return to menu..."
 done
