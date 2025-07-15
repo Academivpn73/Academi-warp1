@@ -1,114 +1,110 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
-# ========== Info ==========
-VERSION="1.0.1"
-CHANNEL="@Academi_vpn"
-ADMIN="@MahdiAGM0"
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ #
+#        Academi Warp Tool         #
+#   Version: 1.0.1 | @Academi_vpn  #
+#    Support: @MahdiAGM0           #
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ #
 
-# ========== Colors ==========
-RED='\e[1;31m'
-GREEN='\e[1;32m'
-YELLOW='\e[1;33m'
-CYAN='\e[1;36m'
-NC='\e[0m'
+# ─────────── Colors ──────────── #
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+CYAN='\033[0;36m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
 
-# ========== Directories ==========
-PROXY_DIR="Academi_Proxy"
-PROXY_FILE="$PROXY_DIR/proxies.txt"
-IP_FILE="Academi_IPs/warp_ipv4.txt"
-mkdir -p $PROXY_DIR
-mkdir -p Academi_IPs
+PROXY_FILE="academi_proxies.txt"
+IP_FILE="academi_ips.txt"
 
-# ========== Requirements ==========
-install_requirements() {
-  for tool in curl jq ping; do
-    if ! command -v $tool >/dev/null 2>&1; then
-      echo -e "${YELLOW}Installing $tool...${NC}"
-      apt install -y $tool >/dev/null 2>&1 || pkg install -y $tool >/dev/null 2>&1
-    fi
-  done
+# ──────── Banner ───────── #
+banner() {
+    clear
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo -e "${GREEN}      Academi Warp Scanner Tool"
+    echo -e "${YELLOW}        Version: 1.0.1"
+    echo -e "${CYAN}   Channel: @Academi_vpn"
+    echo -e "${CYAN}   Admin:   @MahdiAGM0"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 }
 
-# ========== Header ==========
-show_header() {
-  clear
-  echo -e "${CYAN}┌────────────────────────────────────────┐${NC}"
-  echo -e "${CYAN}│        Academi VPN Tool - v$VERSION        │${NC}"
-  echo -e "${CYAN}├────────────────────────────────────────┤${NC}"
-  echo -e "${GREEN}│ Channel : $CHANNEL"
-  echo -e "│ Admin   : $ADMIN${NC}"
-  echo -e "${CYAN}└────────────────────────────────────────┘${NC}"
-}
-
-# ========== WARP IPv4 Scanner ==========
-scan_warp_ips() {
-  echo -e "\n${YELLOW}Scanning real Cloudflare WARP IPv4 addresses...${NC}"
-  > $IP_FILE
-  local count=0
-  while [[ $count -lt 10 ]]; do
-    IP=$(curl -s4 --connect-timeout 3 https://speed.cloudflare.com/meta | jq -r '.client.ip')
-    [[ "$IP" == "null" || -z "$IP" ]] && continue
-
-    PORTS=(80 443 8443 2083)
-    for port in "${PORTS[@]}"; do
-      timeout 1 bash -c "echo > /dev/tcp/$IP/$port" 2>/dev/null
-      if [[ $? -eq 0 ]]; then
-        PING=$(ping -c1 -W1 $IP 2>/dev/null | grep time= | cut -d= -f4 | cut -d' ' -f1)
-        [[ -z "$PING" ]] && continue
-        echo -e "${GREEN}$IP:$port  Ping: ${PING}ms${NC}"
-        echo "$IP:$port  Ping: ${PING}ms" >> $IP_FILE
-        ((count++))
-        break
-      fi
+# ─────── Install Dependencies ─────── #
+install_deps() {
+    for pkg in curl jq; do
+        if ! command -v $pkg &> /dev/null; then
+            echo -e "${YELLOW}Installing $pkg...${NC}"
+            apt update -y &>/dev/null
+            apt install -y $pkg &>/dev/null
+        fi
     done
-    sleep 1
-  done
-
-  echo -e "\n${CYAN}✔ Saved to $IP_FILE${NC}"
-  read -p "Press Enter to return to menu..."
 }
 
-# ========== Fetch Telegram Proxies ==========
-fetch_proxies() {
-  echo -e "\n${YELLOW}Updating Telegram MTProto Proxies...${NC}"
-  curl -s https://raw.githubusercontent.com/ALIILAPRO/MTProtoProxy/main/mtproto.txt -o "$PROXY_FILE"
-  if [[ -s $PROXY_FILE ]]; then
-    echo -e "${GREEN}✔ Proxies updated. Showing top 10:${NC}"
-    head -n 10 $PROXY_FILE | nl
-  else
-    echo -e "${RED}❌ Failed to fetch proxies.${NC}"
-  fi
-  echo -e "\n${CYAN}Next update in 5 hours.${NC}"
-  read -p "Press Enter to return to menu..."
+# ────── Telegram Proxy Updater ───── #
+update_proxies() {
+    echo -e "${YELLOW}\nUpdating Telegram proxies...${NC}"
+    curl -s https://api.proxyscrape.com/?request=displayproxies&proxytype=socks5&timeout=1000&country=all > $PROXY_FILE
+    head -n 10 $PROXY_FILE > temp && mv temp $PROXY_FILE
+    echo -e "${GREEN}✔ Updated proxies saved to ${PROXY_FILE}${NC}"
+    echo -e "\nTop 10 Proxies:\n"
+    nl -w2 -s'. ' $PROXY_FILE
+    echo -e "\n${CYAN}Proxies will auto-update every 5 hours...${NC}"
 }
 
-# ========== Auto Update Proxies Every 5 Hours ==========
-auto_update_proxies() {
-  while true; do
-    fetch_proxies >/dev/null
-    sleep 18000  # 5 hours
-  done
+# Auto-update proxies every 5 hours (background)
+schedule_proxy_updates() {
+    (while true; do
+        update_proxies
+        sleep 18000  # 5 hours
+    done) &
 }
 
-# ========== Main Menu ==========
+# ────── Warp IPv4 IP Scanner ─────── #
+scan_warp_ips() {
+    echo -e "${YELLOW}\nScanning best WARP IPv4 IPs...${NC}"
+    > $IP_FILE
+    local count=0
+    IP_RANGE="162.159.192"
+
+    while [[ $count -lt 10 ]]; do
+        LAST_OCTET=$((RANDOM % 255))
+        IP="$IP_RANGE.$LAST_OCTET"
+
+        PORTS=(80 443 8080 8443)
+        for port in "${PORTS[@]}"; do
+            timeout 1 bash -c "echo >/dev/tcp/$IP/$port" 2>/dev/null
+            if [[ $? -eq 0 ]]; then
+                PING=$(ping -c1 -W1 $IP 2>/dev/null | grep time= | cut -d= -f4 | cut -d' ' -f1)
+                [[ -z "$PING" ]] && continue
+                echo -e "${GREEN}$IP:$port  Ping: ${PING}ms${NC}"
+                echo "$IP:$port  Ping: ${PING}ms" >> $IP_FILE
+                ((count++))
+                break
+            fi
+        done
+    done
+
+    echo -e "\n${CYAN}✔ Saved to $IP_FILE${NC}"
+    read -p "Press Enter to return to menu..."
+}
+
+# ─────── Main Menu ──────── #
 main_menu() {
-  while true; do
-    show_header
-    echo -e "${YELLOW}1) WARP IPv4 Scanner"
-    echo -e "2) Telegram Proxy List"
-    echo -e "0) Exit${NC}"
-    echo
-    read -rp "Choose an option: " opt
-    case $opt in
-      1) scan_warp_ips ;;
-      2) fetch_proxies ;;
-      0) exit ;;
-      *) echo -e "${RED}Invalid choice!${NC}"; sleep 1 ;;
-    esac
-  done
+    while true; do
+        banner
+        echo -e "${YELLOW}1) WARP IPv4 IP Scanner"
+        echo -e "2) Telegram Proxy List"
+        echo -e "3) Exit${NC}"
+        echo
+        read -p "Select an option: " opt
+        case $opt in
+            1) scan_warp_ips ;;
+            2) cat $PROXY_FILE; echo -e "\n${CYAN}Auto-update every 5h is running...${NC}"; read -p "Press Enter to return..." ;;
+            3) echo -e "${RED}Exiting...${NC}"; exit ;;
+            *) echo -e "${RED}Invalid option!${NC}"; sleep 1 ;;
+        esac
+    done
 }
 
-# ========== Run ==========
-install_requirements
-auto_update_proxies & disown
+# ─────── Start Script ─────── #
+install_deps
+schedule_proxy_updates
 main_menu
