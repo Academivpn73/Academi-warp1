@@ -1,95 +1,85 @@
-#!/data/data/com.termux/files/usr/bin/bash
+#!/bin/bash
 
-# ─── Info ────────────────────────────────
-VERSION="1.1.0"
-SUPPORT="@MahdiAGM0"
-CMD_NAME="Academivpn_warp"
-BIN_PATH="/data/data/com.termux/files/usr/bin/$CMD_NAME"
+#========================#
+#   AcademiVPN WARP     #
+#     Script v1.1.0      #
+# Support: @MahdiAGM0    #
+#========================#
 
-# ─── Color ───────────────────────────────
-RED='\033[0;31m'
-GRN='\033[0;32m'
 YEL='\033[1;33m'
-CYA='\033[0;36m'
+CYA='\033[1;36m'
+GRN='\033[1;32m'
+RED='\033[1;31m'
 RST='\033[0m'
 
-# ─── Install Requirements ────────────────
-install_requirements() {
-    echo -e "${CYA}Installing required packages...${RST}"
-    pkg update -y > /dev/null 2>&1
-    pkg install -y curl jq unzip inetutils-ping > /dev/null 2>&1
-    chmod +x $0
-}
-
-# ─── WARP IP Scanner ─────────────────────
-warp_ip_scanner() {
-    echo -e "\n${YEL}🔍 Scanning WARP IPs (Random)...${RST}"
-    for i in {1..10}; do
-        ip="162.$((RANDOM % 255)).$((RANDOM % 255)).$((RANDOM % 255))"
-        port=$((RANDOM % 65535 + 1))
-        ping_result=$(ping -c 1 -W 1 "$ip" | grep "time=" | cut -d'=' -f4 | cut -d' ' -f1)
-        if [ -n "$ping_result" ]; then
-            echo -e "${GRN}[+] $ip:$port - ping ${ping_result}ms${RST}"
-        else
-            echo -e "${RED}[-] $ip:$port - unreachable${RST}"
-        fi
-    done
-}
-
-# ─── Telegram Proxy Fetcher ──────────────
-telegram_proxy() {
-    echo -e "\n${CYA}🌐 Fetching Telegram Proxies...${RST}"
-    proxies=$(curl -s https://raw.githubusercontent.com/hookzof/socks5_list/master/proxy.txt | grep -Eo 'tg://proxy\?server=[^&]+' | sort -u | head -n 10)
-    if [[ -z "$proxies" ]]; then
-        echo -e "${RED}❌ No proxies found.${RST}"
-    else
-        echo -e "${GRN}✅ Proxies:${RST}"
-        echo "$proxies"
-    fi
-}
-
-# ─── Installer Setup ─────────────────────
-install_launcher() {
-    echo -e "${CYA}📌 Installing launcher command...${RST}"
-    echo "#!/data/data/com.termux/files/usr/bin/bash" > $BIN_PATH
-    echo "bash ~/warp.sh" >> $BIN_PATH
-    chmod +x $BIN_PATH
-    echo -e "${GRN}✅ Installed. Run with: ${CMD_NAME}${RST}"
-}
-
-remove_launcher() {
-    rm -f "$BIN_PATH"
-    echo -e "${YEL}🗑️ Launcher removed.${RST}"
-}
-
-# ─── Main Menu ───────────────────────────
-main_menu() {
+show_menu() {
     clear
-    echo -e "${CYA}┌────────────────────────────────────┐"
-    echo -e "│   AcademiVPN WARP Script v$VERSION   │"
-    echo -e "└────────────────────────────────────┘${RST}"
-    echo -e "${YEL}Support:${RST} ${SUPPORT}"
+    echo -e "${CYA}┌─────────────────────────────────────┐${RST}"
+    echo -e "${CYA}│    ${GRN}AcademiVPN WARP Script v1.1.0${CYA}     │${RST}"
+    echo -e "${CYA}└─────────────────────────────────────┘${RST}"
+    echo -e "${YEL}Support: @MahdiAGM0${RST}"
     echo
-    echo -e "${YEL}1) WARP IP Scanner"
-    echo "2) Telegram Proxy Fetcher"
-    echo "3) Install Launcher (${CMD_NAME})"
-    echo "4) Remove Launcher"
-    echo "0) Exit${RST}"
+    echo -e "${YEL}1)${RST} WARP IP Scanner"
+    echo -e "${YEL}2)${RST} Telegram Proxy Fetcher"
+    echo -e "${YEL}3)${RST} Install Launcher (Academivpn_warp)"
+    echo -e "${YEL}4)${RST} Remove Launcher"
+    echo -e "${YEL}0)${RST} Exit"
     echo
-    read -p "➤ Choose option: " opt
-    case $opt in
-        1) warp_ip_scanner ;;
+    read -p "❯ Choose option: " choice
+    case $choice in
+        1) warp_scanner ;;
         2) telegram_proxy ;;
         3) install_launcher ;;
         4) remove_launcher ;;
         0) exit ;;
-        *) echo -e "${RED}❌ Invalid Option${RST}" ;;
+        *) echo -e "${RED}❌ Invalid option.${RST}"; sleep 1; show_menu ;;
     esac
-    echo
-    read -p "Press Enter to return..."
-    main_menu
 }
 
-# ─── Start ───────────────────────────────
-install_requirements
-main_menu
+warp_scanner() {
+    echo -e "${CYA}🔍 Scanning WARP IPs...${RST}"
+    for i in {1..10}; do
+        IP="162.$((RANDOM % 156 + 100)).$((RANDOM % 255)).$((RANDOM % 255))"
+        PORT=$((RANDOM % 65535 + 1))
+        echo -e "${GRN}✅ $IP:$PORT${RST}"
+    done
+    echo; read -p "Press Enter to return..." dummy
+    show_menu
+}
+
+telegram_proxy() {
+    echo -e "\n${CYA}🌐 Fetching Telegram Proxies...${RST}"
+    proxies=$(curl -s https://t.me/s/Mtpro_xyz | grep -oP 'tg://proxy\?server=[^"]+' | head -n 10)
+
+    if [[ -z "$proxies" ]]; then
+        proxies=$(curl -s https://t.me/s/ProxyMTProto | grep -oP 'tg://proxy\?server=[^"]+' | head -n 10)
+    fi
+
+    if [[ -z "$proxies" ]]; then
+        echo -e "${RED}❌ No valid Telegram proxies found.${RST}"
+    else
+        echo -e "${GRN}✅ Telegram Proxies:${RST}"
+        echo "$proxies"
+    fi
+    echo; read -p "Press Enter to return..." dummy
+    show_menu
+}
+
+install_launcher() {
+    echo -e "${GRN}📦 Installing launcher...${RST}"
+    echo "bash $(realpath "$0")" > /data/data/com.termux/files/usr/bin/Academivpn_warp
+    chmod +x /data/data/com.termux/files/usr/bin/Academivpn_warp
+    echo -e "${GRN}✅ Installed! Run: Academivpn_warp${RST}"
+    sleep 1.5
+    show_menu
+}
+
+remove_launcher() {
+    echo -e "${RED}🧹 Removing launcher...${RST}"
+    rm -f /data/data/com.termux/files/usr/bin/Academivpn_warp
+    echo -e "${RED}✅ Launcher removed.${RST}"
+    sleep 1.5
+    show_menu
+}
+
+show_menu
