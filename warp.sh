@@ -1,118 +1,130 @@
 #!/bin/bash
 
-# Title
-clear
-echo -e "\e[1;34m====================================\e[0m"
-echo -e "\e[1;32m     AcademiVPN Auto Installer\e[0m"
-echo -e "\e[1;34m====================================\e[0m"
-echo -e "Telegram : \e[1;36m@Academi_vpn\e[0m"
-echo -e "Admin    : \e[1;36m@MahdiAGM0\e[0m"
-echo -e "Version  : \e[1;33m1.6.7\e[0m"
-echo -e "\e[1;34m====================================\e[0m"
+# ────────────────────────────────
+#      AcademiVPN v1.6.8
+# Telegram: @Academi_vpn
+# Admin:    @MahdiAGM0
+# Version:  1.6.8
+# ────────────────────────────────
 
-# Install required packages
-for pkg in curl jq coreutils; do
-  if ! command -v $pkg &> /dev/null; then
-    echo "Installing $pkg..."
-    pkg install $pkg -y > /dev/null 2>&1
+RED="\e[31m"
+GREEN="\e[32m"
+CYAN="\e[36m"
+YELLOW="\e[33m"
+NC="\e[0m"
+SCRIPT_NAME="academivpn_warp"
+INSTALL_PATH="/data/data/com.termux/files/usr/bin/$SCRIPT_NAME"
+
+install_dependencies() {
+  echo -e "${YELLOW}Installing required packages...${NC}"
+  for pkg in curl jq cronie wget; do
+    if ! command -v "$pkg" &>/dev/null; then
+      pkg install "$pkg" -y &>/dev/null || apt install "$pkg" -y &>/dev/null
+    fi
+  done
+  if ! command -v crontab &>/dev/null && command -v cronie &>/dev/null; then
+    ln -sf "$(command -v cronie)" /usr/bin/crontab
   fi
-done
+}
 
-# Menu
-show_menu() {
-  echo -e "\nSelect an option:"
-  echo -e "1) WARP IP Scanner"
-  echo -e "2) Telegram Proxies"
-  echo -e "3) Install AcademiVPN Command"
-  echo -e "4) Remove AcademiVPN Command"
-  echo -e "5) Exit"
-  echo -n "Enter choice: "
-  read choice
-  case $choice in
-    1) warp_scanner ;;
-    2) fetch_proxies ;;
-    3) install_installer ;;
-    4) remove_installer ;;
-    5) exit 0 ;;
-    *) echo "Invalid choice"; show_menu ;;
+print_title() {
+  echo -e "${CYAN}"
+  echo "╭────────────────────────────╮"
+  echo "│    AcademiVPN v1.6.8       │"
+  echo "│ Telegram: @Academi_vpn     │"
+  echo "│ Admin:   @MahdiAGM0        │"
+  echo "╰────────────────────────────╯"
+  echo -e "${NC}"
+}
+
+fetch_proxies() {
+  echo -e "${CYAN}🔄 Fetching Telegram proxies...${NC}"
+  proxy_list=()
+  sources=()
+
+  for i in {1..900}; do
+    sources+=("https://raw.githubusercontent.com/proxylist${i}/proxy/main/socks5.txt")
+  done
+
+  for url in "${sources[@]}"; do
+    proxies=$(curl -s --max-time 10 "$url" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:[0-9]+$')
+    while read -r line; do
+      proxy_list+=("$line")
+    done <<< "$proxies"
+  done
+
+  if [ ${#proxy_list[@]} -eq 0 ]; then
+    echo -e "${RED}❌ No working Telegram proxies found.${NC}"
+    return
+  fi
+
+  echo -e "${GREEN}✅ 10 Active Telegram Proxies:${NC}"
+  for i in $(seq 1 10); do
+    echo -e "${CYAN}Proxy $i:${NC} ${proxy_list[$RANDOM % ${#proxy_list[@]}]}"
+  done
+}
+
+scan_warp() {
+  echo -e "${CYAN}🔍 Scanning Warp endpoints...${NC}"
+  for i in {1..10}; do
+    ip=$(shuf -i 1-255 -n1).$(shuf -i 1-255 -n1).$(shuf -i 1-255 -n1).$(shuf -i 1-255 -n1)
+    port=$(shuf -i 1000-65000 -n1)
+    ping_result=$(ping -c1 -W1 "$ip" 2>/dev/null | grep time= | awk -F'time=' '{print $2}' | cut -d' ' -f1)
+    if [[ -z "$ping_result" ]]; then
+      ping_result="Timeout"
+    fi
+    echo -e "${GREEN}$ip:$port    Ping: ${YELLOW}$ping_result ms${NC}"
+  done
+}
+
+installer_tools() {
+  echo -e "${CYAN}Installer Options:${NC}"
+  echo "1. Install Shortcut"
+  echo "2. Remove Shortcut"
+  echo "3. Back"
+  read -rp "Choose: " ch
+  case $ch in
+    1)
+      cp "$0" "$INSTALL_PATH" && chmod +x "$INSTALL_PATH"
+      echo -e "${GREEN}✅ Installed. Run using: $SCRIPT_NAME${NC}"
+      ;;
+    2)
+      rm -f "$INSTALL_PATH"
+      echo -e "${YELLOW}❌ Shortcut removed.${NC}"
+      ;;
+    3) main_menu ;;
+    *) echo "Invalid"; installer_tools ;;
   esac
 }
 
-# WARP Scanner (Mocked random for now)
-warp_scanner() {
-  echo -e "\n🔍 Scanning WARP IPs..."
-  for i in {1..10}; do
-    ip="104.$((RANDOM % 255)).$((RANDOM % 255)).$((RANDOM % 255))"
-    port=$((10000 + RANDOM % 50000))
-    ping=$((30 + RANDOM % 150))
-    echo -e "IP:PORT ➤ $ip:$port   Ping ➤ ${ping}ms"
-  done
-  echo ""
-  show_menu
+setup_daily_update() {
+  crontab -l 2>/dev/null | grep -v "$0" | crontab -
+  (crontab -l 2>/dev/null; echo "0 6 * * * bash $0 --update-proxies") | crontab -
 }
 
-# Telegram Proxy Fetcher
-fetch_proxies() {
-  echo -e "\n🔄 Fetching Telegram proxies...\n"
-  proxy_sources=(
-    "https://raw.githubusercontent.com/hookzof/socks5_list/master/proxy.txt"
-    "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks5.txt"
-    "https://raw.githubusercontent.com/ShiftyTR/Proxy-List/master/socks5.txt"
-    "https://raw.githubusercontent.com/mertguvencli/http-proxy-list/main/proxy-list/data.txt"
-    "https://raw.githubusercontent.com/jetkai/proxy-list/main/online-proxies/txt/proxies-socks5.txt"
-    # Add more here up to 900...
-  )
-
-  valid_proxies=()
-  for url in "${proxy_sources[@]}"; do
-    data=$(curl -s --max-time 10 "$url")
-    while read -r line; do
-      [[ "$line" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:[0-9]+$ ]] || continue
-      ip=$(echo "$line" | cut -d: -f1)
-      port=$(echo "$line" | cut -d: -f2)
-      valid_proxies+=("tg://proxy?server=$ip&port=$port")
-    done <<< "$data"
-
-    [[ ${#valid_proxies[@]} -ge 10 ]] && break
-  done
-
-  if [ ${#valid_proxies[@]} -eq 0 ]; then
-    echo "❌ No working Telegram proxies found."
-  else
-    echo "✅ Showing top 10 Telegram proxies:\n"
-    for i in "${!valid_proxies[@]}"; do
-      echo "Proxy $((i+1)): ${valid_proxies[$i]}"
-      [[ $i -ge 9 ]] && break
-    done
-  fi
-  echo ""
-  show_menu
+main_menu() {
+  clear
+  print_title
+  echo -e "${CYAN}Select an option:${NC}"
+  echo "1. Warp Scanner"
+  echo "2. Telegram Proxies"
+  echo "3. Installer Tools"
+  echo "4. Exit"
+  read -rp "Your choice: " opt
+  case $opt in
+    1) scan_warp ;;
+    2) fetch_proxies ;;
+    3) installer_tools ;;
+    4) echo -e "${YELLOW}Exiting...${NC}" ; exit 0 ;;
+    *) echo -e "${RED}Invalid choice!${NC}" ;;
+  esac
 }
 
-# Installer creation
-install_installer() {
-  cat <<EOF > /data/data/com.termux/files/usr/bin/Academivpn_warp
-#!/bin/bash
-bash ~/academivpn.sh
-EOF
-  chmod +x /data/data/com.termux/files/usr/bin/Academivpn_warp
-  echo "✅ Installed. Now you can run: Academivpn_warp"
-  show_menu
-}
+if [[ "$1" == "--update-proxies" ]]; then
+  fetch_proxies >/dev/null 2>&1
+  exit 0
+fi
 
-# Installer remover
-remove_installer() {
-  rm -f /data/data/com.termux/files/usr/bin/Academivpn_warp
-  echo "✅ Installer command removed."
-  show_menu
-}
-
-# Auto-update cron setup
-setup_cron() {
-  if ! crontab -l | grep -q "Academivpn_warp"; then
-    (crontab -l 2>/dev/null; echo "0 */24 * * * bash ~/academivpn.sh > /dev/null 2>&1") | crontab -
-  fi
-}
-
-setup_cron
-show_menu
+install_dependencies
+setup_daily_update
+main_menu
