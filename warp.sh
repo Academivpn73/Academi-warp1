@@ -1,130 +1,109 @@
 #!/bin/bash
 
-# ───────────── Title Info ─────────────
-VERSION="1.2.1"
-ADMIN="@MahdiAGM0"
-CHANNEL="@AcademiVPN"
-TITLE="AcademiVPN WARP Tool v$VERSION"
+# 🌐 AcademiVPN Warp Panel | Version 1.3.0
+# Channel: @AcademiVPN | Support: @MahdiAGM0
 
-# ───────────── Colors ─────────────
-GREEN="\e[32m"
-RED="\e[31m"
-CYAN="\e[36m"
-YELLOW="\e[33m"
-RESET="\e[0m"
+# 🎨 Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+CYAN='\033[0;36m'
+YELLOW='\033[1;33m'
+RESET='\033[0m'
 
-# ───────────── Install Requirements ─────────────
-install_requirements() {
-    echo -e "${CYAN}[+] Installing required packages...${RESET}"
-    pkg update -y > /dev/null 2>&1
-    pkg install curl wget jq -y > /dev/null 2>&1
-    echo -e "${GREEN}[✓] Requirements installed.${RESET}"
-}
-
-# ───────────── Enhanced Proxy Fetcher ─────────────
-fetch_proxies() {
-    echo -e "${CYAN}Fetching Telegram proxies from global sources...${RESET}"
-
-    sources=(
-        "https://raw.githubusercontent.com/TheSpeedX/SOCKS-List/master/socks5.txt"
-        "https://raw.githubusercontent.com/jetkai/proxy-list/main/online-proxies/txt/proxy-list-socks5.txt"
-        "https://raw.githubusercontent.com/hookzof/socks5_list/master/proxy.txt"
-        "https://raw.githubusercontent.com/ShiftyTR/Proxy-List/master/socks5.txt"
-        "https://raw.githubusercontent.com/roosterkid/openproxylist/main/SOCKS5_RAW.txt"
-        "https://raw.githubusercontent.com/clarketm/proxy-list/master/proxy-list-raw.txt"
-        "https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/socks5.txt"
-        "https://raw.githubusercontent.com/rdavydov/proxy-list/main/proxies/socks5.txt"
-        "https://raw.githubusercontent.com/mmpx12/proxy-list/master/socks5.txt"
-        "https://raw.githubusercontent.com/Zaeem20/FREE_PROXIES_LIST/master/socks5.txt"
-        # اضافه کن هر تعداد دیگه‌ای که خواستی...
-    )
-
-    all_proxies=""
-    for src in "${sources[@]}"; do
-        temp=$(curl -s --max-time 10 "$src" | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}:[0-9]{2,5}')
-        [[ -n "$temp" ]] && all_proxies+=$'\n'"$temp"
-    done
-
-    unique_proxies=$(echo "$all_proxies" | grep -v '^$' | sort -u | shuf | head -n 10)
-
-    if [[ -z "$unique_proxies" ]]; then
-        echo -e "${RED}❌ No proxies found.${RESET}"
-    else
-        echo -e "${GREEN}✅ Top 10 Telegram Proxies:${RESET}"
-        echo "$unique_proxies"
+# 🧱 Install required packages
+install_dependencies() {
+  pkgs=(curl grep sed jq)
+  for pkg in "${pkgs[@]}"; do
+    if ! command -v "$pkg" >/dev/null 2>&1; then
+      echo -e "${YELLOW}[INFO] Installing $pkg...${RESET}"
+      pkg install -y "$pkg" 2>/dev/null || apt install -y "$pkg"
     fi
+  done
 }
 
-# ───────────── Warp Scanner ─────────────
-scan_warp_ips() {
-    echo -e "${CYAN}Scanning WARP IPs from Cloudflare ranges...${RESET}"
-
-    ipv4_ranges=(
-        "162.159.192.0"
-        "188.114.96.0"
-        "104.28.0.0"
-        "198.41.192.0"
-    )
-
-    for i in {1..10}; do
-        base_ip=${ipv4_ranges[$((RANDOM % ${#ipv4_ranges[@]}))]}
-        ip=$(echo $base_ip | awk -F. -v r=$((RANDOM % 255)) '{$4=r; print $1"."$2"."$3"."$4}')
-        port=$((RANDOM % 65535 + 1))
-
-        ping -c 1 -W 1 "$ip" > /dev/null 2>&1
-        if [[ $? -eq 0 ]]; then
-            echo -e "${GREEN}✓ $ip:$port is responsive${RESET}"
-        else
-            echo -e "${YELLOW}- $ip:$port is not responsive${RESET}"
-        fi
-    done
+# 📦 Install launcher
+install_launcher() {
+  cp "$0" /data/data/com.termux/files/usr/bin/Academivpn_warp 2>/dev/null || cp "$0" /usr/local/bin/Academivpn_warp
+  chmod +x /data/data/com.termux/files/usr/bin/Academivpn_warp 2>/dev/null || chmod +x /usr/local/bin/Academivpn_warp
+  echo -e "${GREEN}✅ Installed launcher: Academivpn_warp${RESET}"
 }
 
-# ───────────── Installer Shortcut ─────────────
-install_installer() {
-    echo -e "${CYAN}Installing launcher command...${RESET}"
-    echo "bash $(realpath $0)" > $PREFIX/bin/Academivpn_warp
-    chmod +x $PREFIX/bin/Academivpn_warp
-    echo -e "${GREEN}✓ Now you can run with: ${YELLOW}Academivpn_warp${RESET}"
+# ❌ Remove launcher
+remove_launcher() {
+  rm -f /data/data/com.termux/files/usr/bin/Academivpn_warp /usr/local/bin/Academivpn_warp
+  echo -e "${RED}❌ Removed launcher: Academivpn_warp${RESET}"
 }
 
-remove_installer() {
-    rm -f $PREFIX/bin/Academivpn_warp
-    echo -e "${RED}✘ Launcher removed. Use bash warp.sh to run manually.${RESET}"
+# 🌐 Telegram Proxy Fetcher
+fetch_proxies() {
+  echo -e "${CYAN}Fetching fresh Telegram MTProto proxies...${RESET}"
+
+  sources=(
+    "https://raw.githubusercontent.com/hookzof/socks5_list/master/proxy.txt"
+    "https://raw.githubusercontent.com/Azd325/Telegram-Proxy/master/tg.txt"
+    "https://raw.githubusercontent.com/shellhub/tg-proxy-list/main/list.txt"
+    "https://raw.githubusercontent.com/zaaero/proxy-list/main/telegram.txt"
+    "https://raw.githubusercontent.com/hookzof/proxy-list/master/mtproto.txt"
+  )
+
+  proxies=""
+  for src in "${sources[@]}"; do
+    temp=$(curl -s --max-time 10 "$src" | grep -Eo 'tg://proxy\?server=.*?(&port=.*?)?(&secret=.*?)?' || true)
+    [[ -n "$temp" ]] && proxies+=$'\n'"$temp"
+  done
+
+  final=$(echo "$proxies" | grep '^tg://' | sort -u | shuf | head -n 10)
+
+  if [[ -z "$final" ]]; then
+    echo -e "${RED}❌ Failed to fetch MTProto proxies.${RESET}"
+  else
+    echo -e "${GREEN}✅ Top 10 Telegram Proxies:${RESET}"
+    echo "$final"
+  fi
 }
 
-# ───────────── Main Menu ─────────────
+# 🔍 WARP IP Scanner (Simulated, randomized)
+warp_scanner() {
+  echo -e "${CYAN}Generating random Cloudflare WARP IPs...${RESET}"
+  for i in {1..10}; do
+    ip="162.$((RANDOM % 255)).$((RANDOM % 255)).$((RANDOM % 255))"
+    port=$((RANDOM % 65535 + 1))
+    echo -e "${GREEN}➤ $ip:$port${RESET}"
+  done
+}
+
+# 📋 Main menu
 main_menu() {
-    clear
-    echo -e "${CYAN}╔══════════════════════════════════════╗"
-    echo -e "║   ${TITLE}   ║"
-    echo -e "╠══════════════════════════════════════╣"
-    echo -e "║ Admin:  ${YELLOW}${ADMIN}${CYAN}               ║"
-    echo -e "║ Channel:${YELLOW}${CHANNEL}${CYAN}              ║"
-    echo -e "╚══════════════════════════════════════╝${RESET}"
+  clear
+  echo -e "${CYAN}┌──────────────────────────────────────────┐"
+  echo -e "${CYAN}│    AcademiVPN WARP Panel - v1.3.0        │"
+  echo -e "${CYAN}├──────────────────────────────────────────┤"
+  echo -e "${CYAN}│ Channel: @AcademiVPN                     │"
+  echo -e "${CYAN}│ Support: @MahdiAGM0                      │"
+  echo -e "${CYAN}└──────────────────────────────────────────┘${RESET}"
+  echo
+  echo -e "${YELLOW}[1]${RESET} Get Telegram MTProto Proxies"
+  echo -e "${YELLOW}[2]${RESET} Generate Random WARP IPs"
+  echo -e "${YELLOW}[3]${RESET} Install 'Academivpn_warp' Launcher"
+  echo -e "${YELLOW}[4]${RESET} Remove 'Academivpn_warp'"
+  echo -e "${YELLOW}[5]${RESET} Exit"
+  echo
+  read -p $'\033[1;36mSelect an option: \033[0m' choice
 
-    echo -e "
-1) Install Requirements
-2) Show Telegram Proxies
-3) Scan WARP IPs
-4) Install Shortcut (Academivpn_warp)
-5) Remove Shortcut
-0) Exit
-"
+  case "$choice" in
+    1) fetch_proxies ;;
+    2) warp_scanner ;;
+    3) install_launcher ;;
+    4) remove_launcher ;;
+    5) exit 0 ;;
+    *) echo -e "${RED}Invalid choice.${RESET}" ;;
+  esac
 
-    read -p "Select an option: " opt
-    case "$opt" in
-        1) install_requirements ;;
-        2) fetch_proxies ;;
-        3) scan_warp_ips ;;
-        4) install_installer ;;
-        5) remove_installer ;;
-        0) exit 0 ;;
-        *) echo -e "${RED}Invalid option.${RESET}";;
-    esac
-
-    read -p "Press Enter to return..." && main_menu
+  echo
+  read -p "Press Enter to return to menu..."
+  main_menu
 }
 
-# ───────────── Run ─────────────
+# 🚀 Start script
+install_dependencies
 main_menu
