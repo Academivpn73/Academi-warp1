@@ -1,49 +1,80 @@
-#!/data/data/com.termux/files/usr/bin/bash
+#!/bin/bash
 
-#========[ INFO HEADER ]========#
-clear
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-CYAN='\033[0;36m'
-NC='\033[0m' # No Color
-
-VERSION="1.6.5"
+# ====[ CONFIG ]====
+VERSION="1.6.6"
 ADMIN="@MahdiAGM0"
 CHANNEL="@Academi_vpn"
+INSTALLER_NAME="Academivpn_warp"
+INSTALL_PATH="/data/data/com.termux/files/usr/bin/$INSTALLER_NAME"
 
-title() {
-    echo -e "${CYAN}┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓"
-    echo -e "${CYAN}┃  ${GREEN}Academi VPN Panel           ${CYAN}┃"
-    echo -e "${CYAN}┃  ${NC}Telegram: ${CHANNEL}         ${CYAN}┃"
-    echo -e "${CYAN}┃  ${NC}Admin: ${ADMIN}             ${CYAN}┃"
-    echo -e "${CYAN}┃  ${NC}Version: ${VERSION}              ${CYAN}┃"
-    echo -e "${CYAN}┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛${NC}"
+# ====[ COLORS ]====
+RED='\e[31m'; GREEN='\e[32m'; CYAN='\e[36m'; NC='\e[0m'
+
+# ====[ TITLE ]====
+show_title() {
+    clear
+    echo -e "${CYAN}"
+    echo "╔══════════════════════════════════════════════╗"
+    echo "║           ACADEMI VPN TOOL ${VERSION}                ║"
+    echo "╠══════════════════════════════════════════════╣"
+    echo -e "║ Telegram: ${CHANNEL}              "
+    echo -e "║ Admin:    ${ADMIN}                      "
+    echo -e "║ Version:  ${VERSION}                             "
+    echo "╚══════════════════════════════════════════════╝"
+    echo -e "${NC}"
 }
 
-#========[ DEPENDENCIES ]========#
+# ====[ DEPENDENCIES ]====
 install_requirements() {
-    for pkg in curl wget jq grep ping; do
-        if ! command -v $pkg &> /dev/null; then
-            echo -e "${CYAN}Installing missing package: $pkg...${NC}"
-            pkg install -y $pkg > /dev/null 2>&1
-        fi
+    echo -e "${GREEN}Installing dependencies...${NC}"
+    pkg update -y >/dev/null 2>&1
+    pkg install curl jq -y >/dev/null 2>&1
+}
+
+# ====[ INSTALLER SETUP ]====
+create_installer() {
+    echo -e "${GREEN}Creating installer command: ${INSTALLER_NAME}${NC}"
+    cat <<EOF > "$INSTALL_PATH"
+#!/bin/bash
+bash "$(realpath "$0")"
+EOF
+    chmod +x "$INSTALL_PATH"
+    echo -e "${GREEN}Done. You can now run the script with: ${INSTALLER_NAME}${NC}"
+}
+
+remove_installer() {
+    if [[ -f "$INSTALL_PATH" ]]; then
+        rm "$INSTALL_PATH"
+        echo -e "${GREEN}Installer removed successfully.${NC}"
+    else
+        echo -e "${RED}Installer is not installed.${NC}"
+    fi
+}
+
+# ====[ WARP SCANNER ]====
+generate_ips_ports() {
+    for i in {1..10}; do
+        IP=$(shuf -n 1 -i 1-255).$(shuf -n 1 -i 1-255).$(shuf -n 1 -i 1-255).$(shuf -n 1 -i 1-255)
+        PORT=$(shuf -n 1 -i 1024-65535)
+        PING=$(ping -c 1 -W 1 "$IP" 2>/dev/null | grep time= | awk -F'time=' '{print $2}' | awk '{print $1}')
+        PING=${PING:-"timeout"}
+        echo -e "${CYAN}IP:PORT${NC} ${IP}:${PORT}   ${CYAN}Ping:${NC} ${PING} ms"
     done
 }
 
-#========[ TELEGRAM PROXIES ]========#
+# ====[ TELEGRAM PROXIES ]====
 fetch_proxies() {
     echo -e "${GREEN}🔍 Fetching Telegram proxies...${NC}"
+
     sources=(
-        "https://raw.githubusercontent.com/hamid-gh/Telegram-Proxies/main/tg.txt"
-        "https://raw.githubusercontent.com/officialputuid/KangProxies/main/tg.txt"
-        "https://raw.githubusercontent.com/prxchk/proxy-list/main/http.txt"
-        "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt"
-        "https://raw.githubusercontent.com/ShiftyTR/Proxy-List/master/tg.txt"
+        "https://raw.githubusercontent.com/TheSpeedX/TG-Proxy-List/main/proxies.txt"
+        "https://raw.githubusercontent.com/soroushmirzaei/Telegram-Proxies/main/proxies.txt"
+        "https://raw.githubusercontent.com/hookzof/socks5_list/master/tg.txt"
     )
 
     proxies=()
     for src in "${sources[@]}"; do
-        res=$(curl -fsSL "$src" | grep -Eo 'tg://proxy\?server=[^&]+&port=[0-9]+' | head -n 10)
+        res=$(curl -fsSL "$src" | grep -Eo 'tg://proxy\?server=[^&]+&port=[0-9]+' 2>/dev/null)
         for p in $res; do
             proxies+=("$p")
         done
@@ -54,70 +85,38 @@ fetch_proxies() {
         return
     fi
 
-    echo -e "${GREEN}✅ Found ${#proxies[@]} proxies:${NC}"
-    idx=1
-    for proxy in "${proxies[@]:0:10}"; do
-        echo -e "${CYAN}Proxy $idx:${NC} $proxy"
-        ((idx++))
+    echo -e "${GREEN}✅ Top 10 Telegram Proxies:${NC}"
+    for i in "${!proxies[@]}"; do
+        echo -e "${CYAN}Proxy $((i+1)):${NC} ${proxies[$i]}"
+        [[ $i -ge 9 ]] && break
     done
 }
 
-#========[ WARP IP SCANNER ]========#
-generate_warp_ips() {
-    echo -e "${GREEN}⚡ Generating WARP IPs with Port and Ping...${NC}"
-    count=0
-    while [ $count -lt 10 ]; do
-        ip=$(printf "162.%d.%d.%d" $((RANDOM%255)) $((RANDOM%255)) $((RANDOM%255)))
-        port=$((RANDOM % 65535 + 1))
-        ping_ms=$(ping -c1 -W1 "$ip" 2>/dev/null | grep 'time=' | sed -n 's/.*time=\(.*\) ms/\1/p')
-
-        if [ -n "$ping_ms" ]; then
-            echo -e "${CYAN}[$((count+1))] ${GREEN}$ip:$port${NC}  ${CYAN}Ping:${NC} ${ping_ms}ms"
-            ((count++))
-        fi
-    done
-}
-
-#========[ INSTALLER HANDLER ]========#
-create_installer() {
-    echo -e "${GREEN}✅ Creating shortcut command: Academivpn_warp${NC}"
-    termux_path="/data/data/com.termux/files/usr/bin/Academivpn_warp"
-    cp warp.sh "$termux_path"
-    chmod +x "$termux_path"
-    echo -e "${GREEN}🎉 Done! Now you can run the panel with: ${CYAN}Academivpn_warp${NC}"
-}
-
-remove_installer() {
-    rm -f /data/data/com.termux/files/usr/bin/Academivpn_warp
-    echo -e "${RED}❌ Installer removed. Use ./warp.sh to run manually.${NC}"
-}
-
-#========[ MENU ]========#
+# ====[ MAIN MENU ]====
 main_menu() {
-    while true; do
-        clear
-        title
-        echo ""
-        echo -e "${CYAN}1.${NC} Generate WARP IP:Port"
-        echo -e "${CYAN}2.${NC} Get Telegram Proxies"
-        echo -e "${CYAN}3.${NC} Create Installer Shortcut"
-        echo -e "${CYAN}4.${NC} Remove Installer Shortcut"
-        echo -e "${CYAN}0.${NC} Exit"
-        echo ""
-        read -p "👉 Select option: " opt
-        case $opt in
-            1) generate_warp_ips ;;
-            2) fetch_proxies ;;
-            3) create_installer ;;
-            4) remove_installer ;;
-            0) echo -e "${RED}Bye!${NC}"; exit ;;
-            *) echo -e "${RED}Invalid option.${NC}"; sleep 1 ;;
-        esac
-        echo -e "${CYAN}\n[ Press Enter to return to menu ]${NC}"
-        read
-    done
+    show_title
+    echo -e "${CYAN}1.${NC} Warp IP Scanner"
+    echo -e "${CYAN}2.${NC} Telegram Proxies"
+    echo -e "${CYAN}3.${NC} Install Installer (${INSTALLER_NAME})"
+    echo -e "${CYAN}4.${NC} Remove Installer"
+    echo -e "${CYAN}5.${NC} Exit"
+    echo
+    read -rp "Choose an option: " choice
+
+    case "$choice" in
+        1) generate_ips_ports ;;
+        2) fetch_proxies ;;
+        3) create_installer ;;
+        4) remove_installer ;;
+        5) exit 0 ;;
+        *) echo -e "${RED}Invalid option!${NC}" ;;
+    esac
+
+    echo
+    read -rp "Press Enter to return to menu..."
+    main_menu
 }
 
-#========[ INIT ]========#
+# ====[ INIT ]====
 install_requirements
 main_menu
