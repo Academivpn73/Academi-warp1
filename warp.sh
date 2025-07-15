@@ -1,106 +1,81 @@
 #!/bin/bash
 
-# ╔═╗┌─┐┬─┐┬ ┬┌┬┐┌─┐┬
-# ║  ├┤ ├┬┘└┬┘ │ ├┤ │
-# ╚═╝└─┘┴└─ ┴  ┴ └─┘┴─┘
-
-# ▶ Version and Info
-VERSION="1.0.0"
+VERSION="1.0.1"
 CHANNEL="Telegram: @Academi_vpn"
 SUPPORT="Admin: @MahdiAGM0"
 
-# ▶ Color Codes
-GREEN='\e[1;32m'
-YELLOW='\e[1;33m'
-BLUE='\e[1;34m'
-RED='\e[1;31m'
-NC='\e[0m'
+GREEN='\e[1;32m'; YELLOW='\e[1;33m'; BLUE='\e[1;34m'; RED='\e[1;31m'; NC='\e[0m'
+PROXY_FILE="proxies_mtproto.txt"; IP_FILE="working_ips.txt"
 
-# ▶ Check & install dependencies
-install_dependencies() {
-    for pkg in curl jq; do
-        if ! command -v $pkg &>/dev/null; then
-            echo -e "${YELLOW}Installing $pkg...${NC}"
-            apt update -y >/dev/null 2>&1
-            apt install -y $pkg >/dev/null 2>&1
-        fi
-    done
+install_deps() {
+  for pkg in curl jq ping; do
+    command -v $pkg >/dev/null || { echo -e "${YELLOW}Installing $pkg...${NC}"; pkg install -y $pkg >/dev/null; }
+  done
 }
 
-# ▶ Header
 show_header() {
-    clear
-    echo -e "${BLUE}=============================="
-    echo -e "${GREEN}    Academi Multi Tool"
-    echo -e "${YELLOW}        Version: $VERSION"
-    echo -e "${BLUE}=============================="
-    echo -e "${GREEN}$CHANNEL"
-    echo -e "${GREEN}$SUPPORT"
-    echo -e "${BLUE}==============================${NC}"
+  clear
+  echo -e "${BLUE}===================================="
+  echo -e "${GREEN}    Academi WARP Tool - v$VERSION"
+  echo -e "${YELLOW}    $CHANNEL"
+  echo -e "${YELLOW}    $SUPPORT"
+  echo -e "${BLUE}====================================${NC}"
 }
 
-# ▶ WARP IP Scanner (IPv4 only)
 warp_scanner() {
-    echo -e "${YELLOW}Scanning best WARP IPv4 IPs...${NC}"
-
-    mkdir -p Academi_Configs
-    > live_ips.txt
-
-    COUNT=0
-    while [ $COUNT -lt 10 ]; do
-        IP=$(curl -s --connect-timeout 2 https://api64.ipify.org)
-        [ -z "$IP" ] && continue
-
-        for PORT in 80 443 8080 8443; do
-            ping_result=$(ping -c1 -W1 $IP 2>/dev/null)
-            if echo "$ping_result" | grep -q 'time='; then
-                LATENCY=$(echo "$ping_result" | grep 'time=' | awk -F'time=' '{print $2}' | cut -d' ' -f1)
-                echo "$IP:$PORT  Ping: ${LATENCY}ms" | tee -a live_ips.txt
-                ((COUNT++))
-                break
-            fi
-        done
+  show_header
+  echo -e "${YELLOW}🔍 Scanning real Cloudflare WARP IPv4 IPs...${NC}"
+  > $IP_FILE; count=0
+  for prefix in 162.159.192 162.159.193; do
+    for ip in $(seq 1 254); do
+      addr="$prefix.$ip"
+      # تست پورت (443) و پینگ
+      timeout 1 bash -c "</dev/tcp/$addr/443" &>/dev/null || continue
+      ping_ms=$(ping -c1 -W1 $addr 2>/dev/null | grep time= | awk -F'time=' '{print $2}' | cut -d' ' -f1)
+      [[ -z "$ping_ms" ]] && continue
+      echo "$addr:443  Ping(${ping_ms}ms)" | tee -a $IP_FILE
+      ((count++))
+      [[ $count -ge 10 ]] && break 2
     done
-
-    echo -e "\n${GREEN}✔ Done. Total working IPs: $COUNT${NC}"
+  done
+  if ((count==0)); then echo -e "${RED}❌ No real WARP IPs working.${NC}"
+  else echo -e "\n${GREEN}✅ Found $count real WARP IPs:${NC}"; cat $IP_FILE; fi
+  echo; read -p "Press Enter..."
 }
 
-# ▶ Proxy Updater
 update_proxies() {
-    echo -e "${BLUE}Updating Telegram MTProto proxies...${NC}"
-    curl -s "https://raw.githubusercontent.com/aliilapro/mtproto-proxies/main/mtproto.txt" -o proxies.txt
-    [[ -s proxies.txt ]] && echo -e "${GREEN}✔ Updated successfully.${NC}" || echo -e "${RED}❌ Failed to update.${NC}"
+  echo -e "${BLUE}Updating MTProto proxy list...${NC}"
+  curl -s https://raw.githubusercontent.com/ALIILAPRO/MTProtoProxy/main/mtproto.txt -o $PROXY_FILE
+  [[ -s $PROXY_FILE ]] && echo -e "${GREEN}✔ Proxies updated.${NC}" || echo -e "${RED}❌ Proxy update failed.${NC}"
 }
 
-# ▶ Proxy Viewer
 show_proxies() {
-    [[ ! -f proxies.txt ]] && update_proxies
-    echo -e "${YELLOW}\n📡 Telegram Proxies (Top 10):${NC}"
-    nl proxies.txt | head -n 10
-    echo -e "${BLUE}\nLast Updated: $(date)${NC}"
+  show_header
+  [[ ! -f $PROXY_FILE ]] && update_proxies
+  echo -e "${YELLOW}📡 Telegram MTProto Proxies (top 10):${NC}"
+  head -n 10 $PROXY_FILE | nl
+  echo -e "${BLUE}\nLast updated: $(date)${NC}"
+  echo; read -p "Press Enter..."
 }
 
-# ▶ Main Menu
 main_menu() {
+  install_deps
+  update_proxies
+  # cron setup:
+  (crontab -l 2>/dev/null | grep -v "$PROXY_FILE"; echo "0 */3 * * * curl -s https://raw.githubusercontent.com/ALIILAPRO/MTProtoProxy/main/mtproto.txt -o $(pwd)/$PROXY_FILE") | crontab -
+  while true; do
     show_header
-    echo -e "${YELLOW}1) WARP IPv4 Scanner"
-    echo -e "2) Telegram Proxy List"
+    echo -e "${YELLOW}1) Scan WARP IPv4 IPs"
+    echo -e "2) Show Telegram Proxies"
     echo -e "0) Exit${NC}"
-    echo -ne "${BLUE}Choose an option: ${NC}"
-    read opt
-
+    read -rp "Choose option: " opt
     case $opt in
-        1) warp_scanner ;;
-        2) show_proxies ;;
-        0) exit ;;
-        *) echo -e "${RED}❌ Invalid option${NC}"; sleep 1 ;;
+      1) warp_scanner ;;
+      2) show_proxies ;;
+      0) exit ;;
+      *) echo -e "${RED}Invalid choice.${NC}"; sleep 1 ;;
     esac
+  done
 }
 
-# ▶ Main Loop
-install_dependencies
-while true; do
-    main_menu
-    echo -ne "${BLUE}\nPress enter to return to menu...${NC}"
-    read
-done
+main_menu
