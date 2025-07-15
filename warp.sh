@@ -1,108 +1,82 @@
 #!/bin/bash
 
-mkdir -p Academi_Configs
+clear
+echo "========================================"
+echo "     WARP Tools by @Academi_vpn"
+echo "========================================"
+echo "[1] WARP Best IP Scanner"
+echo "[2] Generate WireGuard Config"
+echo "========================================"
+read -p "Select an option [1-2]: " opt
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-NC='\033[0m'
-
-print_menu() {
-  echo ""
-  echo "========== Academi VPN Tool =========="
-  echo "1. Warp IP Scanner"
-  echo "2. WireGuard + V2Ray Config Generator"
-  echo "0. Exit"
-  echo "======================================"
-  echo -n "Select an option: "
-}
-
-warp_scanner() {
-  echo ""
-  echo "🔍 Scanning Warp IPs..."
-  count=0
-  while [ $count -lt 10 ]; do
-    ip="162.159.$((RANDOM % 256)).$((RANDOM % 256))"
-    for port in 80 443 8080 8443; do
-      (echo > /dev/tcp/$ip/$port) >/dev/null 2>&1
-      if [ $? -eq 0 ]; then
-        ping_result=$(ping -c1 -W1 $ip | grep 'time=' | awk -F'time=' '{print $2}' | cut -d' ' -f1)
-        if [ ! -z "$ping_result" ]; then
-          echo -e "${GREEN}${ip}:${port}  Ping: ${ping_result}ms${NC}"
-          ((count++))
-          break
-        fi
-      fi
-    done
+# بررسی پیش‌نیازها
+function check_requirements() {
+  for pkg in curl jq ping wgcf; do
+    if ! command -v $pkg &>/dev/null; then
+      echo "[*] Installing $pkg..."
+      pkg install $pkg -y >/dev/null 2>&1 || apt install $pkg -y >/dev/null 2>&1
+    fi
   done
 }
 
-generate_wg_v2ray_config() {
-  echo ""
-  echo "🔧 Generating WireGuard + V2Ray Config..."
-  
-  # Sample WG config template (random IP and keys here for demo)
-  private_key=$(wg genkey)
-  public_key=$(echo "$private_key" | wg pubkey)
-  ip="162.159.$((RANDOM % 256)).$((RANDOM % 256))"
-  conf_name="wg_${ip//./_}.conf"
-  conf_path="Academi_Configs/$conf_name"
+# گزینه 1: اسکن آی‌پی‌های وارپ
+function scan_ips() {
+  echo -e "\n🔍 Scanning WARP IPs (max 10)...\n"
+  ips=(
+    162.159.192.1 162.159.193.1 188.114.96.3 188.114.97.3
+    162.159.195.1 162.159.223.1 162.159.192.3 162.159.193.3
+    162.159.195.3 188.114.96.1 188.114.97.1 162.159.49.100
+  )
 
-  cat > $conf_path << EOF
-[Interface]
-PrivateKey = $private_key
-Address = 172.16.0.2/32
-DNS = 1.1.1.1
+  count=0
+  for ip in "${ips[@]}"; do
+    ping_ms=$(ping -c 1 -W 1 $ip | grep 'time=' | awk -F'time=' '{print $2}' | cut -d ' ' -f1)
+    nc -z -w1 $ip 443 &>/dev/null
+    if [[ $? -eq 0 && -n "$ping_ms" ]]; then
+      echo "$ip:443  Ping: ${ping_ms}ms"
+      ((count++))
+    fi
+    [[ $count -ge 10 ]] && break
+  done
 
-[Peer]
-PublicKey = $(wg genkey | wg pubkey)
-Endpoint = $ip:443
-AllowedIPs = 0.0.0.0/0
-PersistentKeepalive = 25
-EOF
-
-  # Mock Country Flag – can be replaced with real API later
-  country_flag="🇺🇸"
-
-  # V2Ray JSON Template
-  v2ray_json="Academi_Configs/v2ray_${ip//./_}.json"
-  cat > $v2ray_json << EOF
-{
-  "inbounds": [{
-    "port": 10808,
-    "protocol": "socks",
-    "settings": {
-      "auth": "noauth",
-      "udp": true
-    }
-  }],
-  "outbounds": [{
-    "protocol": "wireguard",
-    "settings": {
-      "secretKey": "$private_key",
-      "address": ["172.16.0.2/32"],
-      "peers": [{
-        "publicKey": "$(wg genkey | wg pubkey)",
-        "endpoint": "$ip:443",
-        "persistentKeepalive": 25
-      }]
-    }
-  }],
-  "tag": "AcademiVPN",
-  "remarks": "Telegram:@Academi_vpn $country_flag"
-}
-EOF
-
-  echo -e "${GREEN}✔ Saved: $conf_path"
-  echo -e "✔ Saved: $v2ray_json${NC}"
+  [[ $count -eq 0 ]] && echo "❌ No working IPs found."
 }
 
-while true; do
-  print_menu
-  read option
-  case $option in
-    1) warp_scanner ;;
-    2) generate_wg_v2ray_config ;;
-    0) echo "Goodbye!"; exit ;;
-    *) echo -e "${RED}Invalid option!${NC}" ;;
-  esac
-done
+# گزینه 2: ساخت کانفیگ وایرگارد واقعی
+function generate_wireguard_config() {
+  echo -e "\n🔧 Creating WireGuard Config via WARP..."
+
+  rm -f wgcf-account.toml wgcf-profile.conf
+
+  wgcf register --accept-tos >/dev/null 2>&1
+  wgcf generate >/dev/null 2>&1
+
+  wg-quick up wgcf-profile.conf >/dev/null 2>&1
+
+  IP=$(curl -s --max-time 5 ifconfig.me)
+  PING=$(ping -c 1 1.1.1.1 | grep 'time=' | cut -d '=' -f 4 | cut -d ' ' -f 1)
+
+  wg-quick down wgcf-profile.conf >/dev/null 2>&1
+
+  if [[ -n "$IP" ]]; then
+    echo ""
+    echo "✅ WireGuard Config (WARP) - Ready to Use"
+    echo "=============================================="
+    echo "[🇺🇸] Telegram:@Academi_vpn"
+    echo "IP: $IP     Ping: ${PING}ms"
+    echo "=============================================="
+    echo ""
+    sed "s/engage.cloudflareclient.com/$IP/" wgcf-profile.conf
+  else
+    echo "❌ Could not retrieve WARP IP."
+  fi
+}
+
+# اجرای بخش انتخابی
+check_requirements
+
+case $opt in
+  1) scan_ips ;;
+  2) generate_wireguard_config ;;
+  *) echo "Invalid option!" ;;
+esac
