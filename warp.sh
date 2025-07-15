@@ -1,76 +1,70 @@
 #!/bin/bash
 
-# Academi VPN Tool
-# Telegram: @Academi_vpn
-#Admin: @MahdiAGM0
-
 # Colors
-RED='\e[91m'
-GRN='\e[92m'
-YEL='\e[93m'
-NC='\e[0m'
+GRN="\e[32m"
+RED="\e[31m"
+YEL="\e[33m"
+NC="\e[0m"
 
-# Auto install dependencies
-deps=(curl jq ping)
-for dep in "${deps[@]}"; do
-    if ! command -v $dep >/dev/null 2>&1; then
-        echo -e "${YEL}Installing $dep...${NC}"
-        pkg install -y $dep 2>/dev/null || apt install -y $dep
+# Banner
+banner() {
+  clear
+  echo -e "${GRN}╔═══════════════════════════════════════╗"
+  echo -e "║  Telegram: @Academi_vpn  / Admin Support: @MahdiAGM0  ║"
+  echo -e "╚═══════════════════════════════════════╝${NC}"
+}
+
+# WARP IP Scanner
+warp_scanner() {
+  banner
+  echo -e "${YEL}Scanning WARP IPs (max 10)...${NC}"
+  count=0
+  while [ $count -lt 10 ]; do
+    ip=$(curl -4 -s --connect-timeout 3 https://api.ipify.org)
+    port=$(shuf -n 1 -e 80 443 2086 8443 8080)
+    ping_ms=$(ping -c 1 -W 1 "$ip" | grep time= | sed -E 's/.*time=([0-9.]+).*/\1/')
+    nc -z -w1 "$ip" "$port" >/dev/null 2>&1
+    if [[ $? -eq 0 && $ping_ms != "" ]]; then
+      echo -e "${GRN}$ip:$port  Ping: ${ping_ms}ms${NC}"
+      ((count++))
     fi
-done
-
-# Function: Scan 10 WARP IPs
-scan_warp_ips() {
-    echo -e "${YEL}Scanning WARP IPs (max 10)...${NC}"
-    mkdir -p tmp_ips
-    cd tmp_ips || exit
-
-    count=0
-    while [ $count -lt 10 ]; do
-        ip=$(curl -s --connect-timeout 3 https://api64.ipify.org)
-        port=$(shuf -n 1 -e 80 443 2086 8443 8080)
-        ping_ms=$(ping -c 1 -W 1 "$ip" | grep time= | sed -E 's/.*time=([0-9.]+).*/\1/')
-        nc -z -w1 "$ip" "$port" >/dev/null 2>&1
-
-        if [[ $? -eq 0 && $ping_ms != "" ]]; then
-            echo -e "${GRN}$ip:$port  Ping: ${ping_ms}ms${NC}"
-            ((count++))
-        fi
-    done
-
-    cd ..
-    rm -rf tmp_ips
+  done
+  echo ""
+  read -p "Press Enter to return to menu..."
 }
 
-# Function: Show Telegram proxies
-show_telegram_proxies() {
-    echo -e "${YEL}Academi VPN Telegram Proxies:${NC}"
-
-    # 👇 هر روز این لیست رو به‌روز کن:
-    proxies=(
-        "tg://proxy?server=proxy1.academi.ir&port=443&secret=ee00000000000000000000000000000000000000"
-        "tg://proxy?server=proxy2.academi.ir&port=443&secret=ee00000000000000000000000000000000000000"
-        "tg://proxy?server=proxy3.academi.ir&port=443&secret=ee00000000000000000000000000000000000000"
-    )
-
-    for proxy in "${proxies[@]}"; do
-        echo -e "${GRN}$proxy${NC}"
-    done
+# Telegram Proxy Viewer
+telegram_proxy() {
+  banner
+  echo -e "${YEL}Telegram Proxy List:${NC}"
+  echo ""
+  
+  # 👇 Add your proxies manually here
+  echo -e "${GRN}1. tg://proxy?server=1.1.1.1&port=443&secret=ee00000000000000000000000000000000000000"
+  echo -e "2. tg://proxy?server=2.2.2.2&port=443&secret=ee00000000000000000000000000000000000000${NC}"
+  echo ""
+  echo -e "${YEL}Update this list inside the script manually.${NC}"
+  echo ""
+  read -p "Press Enter to return to menu..."
 }
 
-# Main menu
-clear
-echo -e "${GRN}Academi VPN Tool${NC}"
-echo "=============================="
-echo "1. WARP IP Scanner"
-echo "2. Telegram Proxies"
-echo "0. Exit"
-echo "=============================="
-read -p "Select option: " opt
+# Menu
+main_menu() {
+  while true; do
+    banner
+    echo -e "${GRN}Select an option:${NC}"
+    echo "1) WARP IP Scanner"
+    echo "2) Telegram Proxy List"
+    echo "0) Exit"
+    echo ""
+    read -p "Choice: " choice
+    case $choice in
+      1) warp_scanner ;;
+      2) telegram_proxy ;;
+      0) exit ;;
+      *) echo -e "${RED}Invalid option.${NC}" && sleep 1 ;;
+    esac
+  done
+}
 
-case $opt in
-  1) scan_warp_ips ;;
-  2) show_telegram_proxies ;;
-  0) exit ;;
-  *) echo -e "${RED}Invalid option.${NC}" ;;
-esac
+main_menu
