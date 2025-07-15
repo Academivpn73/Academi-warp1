@@ -1,110 +1,92 @@
 #!/bin/bash
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ #
-#        Academi Warp Tool         #
-#   Version: 1.0.1 | @Academi_vpn  #
-#    Support: @MahdiAGM0           #
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ #
+# Academi WARP Scanner v1.0.3
+# Channel: @Academi_vpn | Support: @MahdiAGM0
 
-# ─────────── Colors ──────────── #
+# رنگ‌ها
 RED='\033[0;31m'
 GREEN='\033[0;32m'
-CYAN='\033[0;36m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-PROXY_FILE="academi_proxies.txt"
-IP_FILE="academi_ips.txt"
+# لیست رنج آی‌پی Cloudflare WARP (IPv4)
+RANGES=(
+  "162.159.192.0/24"
+  "162.159.193.0/24"
+  "162.159.195.0/24"
+  "188.114.96.0/24"
+  "188.114.97.0/24"
+  "188.114.98.0/24"
+  "188.114.99.0/24"
+)
 
-# ──────── Banner ───────── #
-banner() {
-    clear
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo -e "${GREEN}      Academi Warp Scanner Tool"
-    echo -e "${YELLOW}        Version: 1.0.1"
-    echo -e "${CYAN}   Channel: @Academi_vpn"
-    echo -e "${CYAN}   Admin:   @MahdiAGM0"
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+# بررسی و نصب ابزارهای لازم
+install_requirements() {
+  echo -e "${YELLOW}Checking and installing required tools...${NC}"
+  for pkg in curl timeout ping shuf; do
+    if ! command -v $pkg >/dev/null 2>&1; then
+      echo -e "${RED}Installing $pkg...${NC}"
+      apt update >/dev/null && apt install -y $pkg >/dev/null
+    fi
+  done
 }
 
-# ─────── Install Dependencies ─────── #
-install_deps() {
-    for pkg in curl jq; do
-        if ! command -v $pkg &> /dev/null; then
-            echo -e "${YELLOW}Installing $pkg...${NC}"
-            apt update -y &>/dev/null
-            apt install -y $pkg &>/dev/null
-        fi
+# تابع تست اتصال
+test_ip() {
+  ip=$1
+  for port in $(seq 1 65535); do
+    timeout 1 bash -c "</dev/tcp/$ip/$port" 2>/dev/null
+    if [ $? -eq 0 ]; then
+      ping_ms=$(ping -c 1 -W 1 $ip | grep 'time=' | awk -F'time=' '{print $2}' | cut -d' ' -f1)
+      if [ -n "$ping_ms" ]; then
+        echo -e "${GREEN}${ip}:${port}${NC}  Ping: ${ping_ms}ms"
+        echo "${ip}:${port}  Ping: ${ping_ms}ms" >> results.txt
+        return 0
+      fi
+    fi
+  done
+  return 1
+}
+
+# تابع ساخت لیست IP از رنج
+generate_ips() {
+  range=$1
+  IFS=/ read ip prefix <<< "$range"
+  base=$(echo $ip | awk -F. '{print $1"."$2"."$3}')
+  for i in {1..254}; do
+    echo "$base.$i"
+  done | shuf -n 30  # حداکثر 30 تا از هر رنج
+}
+
+# اجرای کلی اسکنر
+run_scanner() {
+  echo -e "${YELLOW}🔍 Scanning best WARP IPv4 IPs... (This may take time)${NC}"
+  > results.txt
+  count=0
+
+  for range in "${RANGES[@]}"; do
+    ips=$(generate_ips "$range")
+    for ip in $ips; do
+      test_ip "$ip" &
+      sleep 0.2
+      ((count++))
+      if [ $(wc -l < results.txt) -ge 10 ]; then
+        break 2
+      fi
     done
+  done
+
+  echo -e "\n${GREEN}✔ Done. Working IPs:${NC}"
+  cat results.txt | head -n 10
+  rm results.txt
 }
 
-# ────── Telegram Proxy Updater ───── #
-update_proxies() {
-    echo -e "${YELLOW}\nUpdating Telegram proxies...${NC}"
-    curl -s https://api.proxyscrape.com/?request=displayproxies&proxytype=socks5&timeout=1000&country=all > $PROXY_FILE
-    head -n 10 $PROXY_FILE > temp && mv temp $PROXY_FILE
-    echo -e "${GREEN}✔ Updated proxies saved to ${PROXY_FILE}${NC}"
-    echo -e "\nTop 10 Proxies:\n"
-    nl -w2 -s'. ' $PROXY_FILE
-    echo -e "\n${CYAN}Proxies will auto-update every 5 hours...${NC}"
-}
+clear
+echo -e "${YELLOW}╔═══════════════════════════════════════╗"
+echo -e "║   WARP IPv4 Scanner - Version 1.0.3   ║"
+echo -e "║   Channel: @Academi_vpn               ║"
+echo -e "║   Support: @MahdiAGM0                 ║"
+echo -e "╚═══════════════════════════════════════╝${NC}\n"
 
-# Auto-update proxies every 5 hours (background)
-schedule_proxy_updates() {
-    (while true; do
-        update_proxies
-        sleep 18000  # 5 hours
-    done) &
-}
-
-# ────── Warp IPv4 IP Scanner ─────── #
-scan_warp_ips() {
-    echo -e "${YELLOW}\nScanning best WARP IPv4 IPs...${NC}"
-    > $IP_FILE
-    local count=0
-    IP_RANGE="162.159.192"
-
-    while [[ $count -lt 10 ]]; do
-        LAST_OCTET=$((RANDOM % 255))
-        IP="$IP_RANGE.$LAST_OCTET"
-
-        PORTS=(80 443 8080 8443)
-        for port in "${PORTS[@]}"; do
-            timeout 1 bash -c "echo >/dev/tcp/$IP/$port" 2>/dev/null
-            if [[ $? -eq 0 ]]; then
-                PING=$(ping -c1 -W1 $IP 2>/dev/null | grep time= | cut -d= -f4 | cut -d' ' -f1)
-                [[ -z "$PING" ]] && continue
-                echo -e "${GREEN}$IP:$port  Ping: ${PING}ms${NC}"
-                echo "$IP:$port  Ping: ${PING}ms" >> $IP_FILE
-                ((count++))
-                break
-            fi
-        done
-    done
-
-    echo -e "\n${CYAN}✔ Saved to $IP_FILE${NC}"
-    read -p "Press Enter to return to menu..."
-}
-
-# ─────── Main Menu ──────── #
-main_menu() {
-    while true; do
-        banner
-        echo -e "${YELLOW}1) WARP IPv4 IP Scanner"
-        echo -e "2) Telegram Proxy List"
-        echo -e "3) Exit${NC}"
-        echo
-        read -p "Select an option: " opt
-        case $opt in
-            1) scan_warp_ips ;;
-            2) cat $PROXY_FILE; echo -e "\n${CYAN}Auto-update every 5h is running...${NC}"; read -p "Press Enter to return..." ;;
-            3) echo -e "${RED}Exiting...${NC}"; exit ;;
-            *) echo -e "${RED}Invalid option!${NC}"; sleep 1 ;;
-        esac
-    done
-}
-
-# ─────── Start Script ─────── #
-install_deps
-schedule_proxy_updates
-main_menu
+install_requirements
+run_scanner
