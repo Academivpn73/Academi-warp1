@@ -1,104 +1,109 @@
-#!/data/data/com.termux/files/usr/bin/bash
+#!/bin/bash
 
-VERSION="1.6.5"
-ADMIN="@MahdiAGM0"
-CHANNEL="@Academi_vpn"
-INSTALLER="Academivpn_warp"
-INSTALL_PATH="/data/data/com.termux/files/usr/bin/$INSTALLER"
-PROXY_TMP="$HOME/.proxy_list.txt"
+#──────────── ACADEMIVPN WARP PANEL ────────────#
+TITLE="AcademiVPN WARP PANEL"
+CHANNEL="Telegram: @Academi_vpn"
+ADMIN="Admin: @MahdiAGM0"
+VERSION="Version: 1.6.7"
+#───────────────────────────────────────────────#
 
-RED='\e[31m'; GREEN='\e[32m'; CYAN='\e[36m'; NC='\e[0m'
-
-title(){
+print_title() {
   clear
-  echo -e "${CYAN}"
-  echo    "╭──────────────────────────────────────╮"
-  echo -e "│ Academi VPN Tool            v$VERSION │"
-  echo -e "│ Telegram: $CHANNEL"
-  echo -e "│ Admin:    $ADMIN"
-  echo    "╰──────────────────────────────────────╯"
-  echo -e "${NC}"
+  echo -e "\e[96m╔════════════════════════════════════════╗\e[0m"
+  echo -e "\e[92m║        $TITLE               \e[0m"
+  echo -e "\e[96m╠════════════════════════════════════════╣\e[0m"
+  echo -e "\e[92m║ $CHANNEL     \e[0m"
+  echo -e "\e[92m║ $ADMIN              \e[0m"
+  echo -e "\e[92m║ $VERSION                              \e[0m"
+  echo -e "\e[96m╚════════════════════════════════════════╝\e[0m"
+  echo ""
 }
 
-check_deps(){
-  for cmd in curl jq grep ping; do
-    command -v $cmd &>/dev/null || pkg install -y $cmd &>/dev/null
+install_dependencies() {
+  for pkg in curl jq grep coreutils; do
+    command -v $pkg >/dev/null 2>&1 || {
+      echo "📦 Installing $pkg..."
+      pkg install -y $pkg >/dev/null 2>&1 || sudo apt install -y $pkg
+    }
   done
 }
 
-create_installer(){
-  echo -e "${GREEN}Created shortcut: $INSTALLER${NC}"
-  echo -e "#!/bin/bash\nbash \"$(realpath "$0")\"" > "$INSTALL_PATH"
-  chmod +x "$INSTALL_PATH"
+generate_warp_ips() {
+  echo -e "\n🔍 Scanning 10 random working WARP IPs..."
+  for i in {1..10}; do
+    IP=$(shuf -i 1-255 -n 4 | paste -sd .)
+    PORT=$((RANDOM % 65535 + 1))
+    PING=$(ping -c 1 -W 1 $IP | grep 'time=' | awk -F'time=' '{print $2}' | cut -d' ' -f1)
+    if [ -z "$PING" ]; then PING="Timeout"; fi
+    echo -e "🌐 $i) $IP:$PORT  |  🕒 Ping: $PING ms"
+  done
 }
 
-remove_installer(){
-  rm -f "$INSTALL_PATH" && echo -e "${GREEN}Removed shortcut.${NC}"
-}
+fetch_telegram_proxies() {
+  echo -e "\n🌐 Fetching fresh Telegram proxies..."
+  SOURCES=(
+    "https://raw.githubusercontent.com/roosterkid/openproxylist/main/Telegram.txt"
+    "https://raw.githubusercontent.com/hookzof/socks5_list/master/proxy.txt"
+    "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks5.txt"
+    "https://raw.githubusercontent.com/jetkai/proxy-list/main/online-proxies/txt/proxy.txt"
+  )
 
-scan_warp(){
-  echo -e "${CYAN}Generating 10 random IP:Port (with ping)...${NC}"
-  count=0
-  while [ $count -lt 10 ]; do
-    ip=$(shuf -i 1-255 -n1).$(shuf -i1-255 -n1).$(shuf -i1-255 -n1).$(shuf -i1-255 -n1)
-    port=$(shuf -i1000-65000 -n1)
-    ping_ms=$(ping -c1 -W1 "$ip" 2>/dev/null|grep time=|awk -F'time=' '{print $2}'|cut -d' ' -f1)
-    if [ -n "$ping_ms" ]; then
-      echo -e "${GREEN}IP: $ip:$port${NC}  Ping: ${ping_ms}ms"
-      ((count++))
+  PROXIES=()
+  for url in "${SOURCES[@]}"; do
+    TMP=$(curl -s --max-time 10 "$url" | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}:[0-9]+' | head -n 30)
+    while read -r proxy; do
+      [[ ! -z "$proxy" ]] && PROXIES+=("$proxy")
+    done <<< "$TMP"
+  done
+
+  VALID=()
+  for proxy in "${PROXIES[@]}"; do
+    if timeout 3 curl -s -x socks5://$proxy https://core.telegram.org >/dev/null 2>&1; then
+      VALID+=("$proxy")
     fi
+    [[ ${#VALID[@]} -ge 10 ]] && break
   done
-}
 
-fetch_proxies(){
-  echo -e "${GREEN}Fetching Telegram proxies...${NC}"
-  > "$PROXY_TMP"
-
-  # Source 1: MTPro.XYZ
-  curl -fsSL "https://mtpro.xyz/mtproto" | grep -Eo 'tg://proxy\?server=[^&]+&port=[0-9]+' >> "$PROXY_TMP"
-
-  # Source 2: GitHub raw
-  curl -fsSL "https://raw.githubusercontent.com/hookzof/socks5_list/master/proxy.txt" |
-  grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}:[0-9]{2,5}' |
-  awk -F':' '{print "tg://proxy?server="$1"&port="$2}' >> "$PROXY_TMP"
-
-  # Source 3: Custom (add more if needed)
-  curl -fsSL "https://raw.githubusercontent.com/roosterkid/opml-browse/master/resources/mtproto.txt" |
-  grep -E '^tg://' >> "$PROXY_TMP"
-
-  sort -u "$PROXY_TMP" | grep -E '^tg://proxy\?server=' | head -n10 > "$PROXY_TMP"
-}
-
-show_proxies(){
-  fetch_proxies
-  if ! [[ -s $PROXY_TMP ]]; then
-    echo -e "${RED}❌ No working Telegram proxies found.${NC}"
-    return
+  if [ ${#VALID[@]} -eq 0 ]; then
+    echo "❌ No working Telegram proxies found."
+  else
+    echo -e "\n✅ Top 10 Telegram Proxies:"
+    count=1
+    for proxy in "${VALID[@]}"; do
+      echo "Proxy $count: $proxy"
+      ((count++))
+    done
   fi
-  echo -e "${CYAN}Top 10 Telegram Proxies:${NC}"
-  cat -n "$PROXY_TMP" | while read n p; do
-    echo -e "${CYAN}Proxy $n:${NC} $p"
-  done
 }
 
-main_menu(){
-  title
-  echo -e "${CYAN}1) Warp IP Scanner"
-  echo -e "2) Telegram Proxies"
-  echo -e "3) Install shortcut (${INSTALLER})"
-  echo -e "4) Remove shortcut"
-  echo -e "0) Exit${NC}"
-  read -p "Choose: " c
-  case $c in
-    1) scan_warp ;;
-    2) show_proxies ;;
-    3) create_installer ;;
-    4) remove_installer ;;
-    0) exit ;;
-    *) echo -e "${RED}Invalid option.${NC}" ;;
+auto_update_proxies() {
+  CRON_JOB="@daily bash /usr/local/bin/Academivpn_warp --update-proxies"
+  (crontab -l 2>/dev/null | grep -v 'Academivpn_warp' ; echo "$CRON_JOB") | crontab -
+}
+
+menu() {
+  print_title
+  echo -e "\e[93m[1]\e[0m 🔎 WARP IP Scanner"
+  echo -e "\e[93m[2]\e[0m 📡 Telegram Proxy Finder"
+  echo -e "\e[93m[3]\e[0m ❌ Exit"
+  echo ""
+  read -rp "🧭 Choose an option: " opt
+  case $opt in
+    1) generate_warp_ips ;;
+    2) fetch_telegram_proxies ;;
+    3) echo "👋 Bye!" && exit 0 ;;
+    *) echo "❌ Invalid option";;
   esac
-  read -p "Press Enter..." && main_menu
+  echo ""
+  read -rp "↩️ Press Enter to return..." && menu
 }
 
-check_deps
-main_menu
+# For daily update if script is run with --update-proxies
+if [[ "$1" == "--update-proxies" ]]; then
+  fetch_telegram_proxies > /tmp/daily_proxies.txt
+  exit 0
+fi
+
+install_dependencies
+auto_update_proxies
+menu
