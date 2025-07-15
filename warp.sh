@@ -15,7 +15,7 @@ RESET=$(tput sgr0)
 function header() {
   clear
   echo "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo "${GREEN}      Academi VPN Script - Version 1.0.0"
+  echo "${GREEN}      Academi VPN Script - Version 1.0.3"
   echo "${YELLOW}      Telegram: @Academi_vpn"
   echo "${YELLOW}      Support: @MahdiAGM0"
   echo "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
