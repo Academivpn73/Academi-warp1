@@ -1,83 +1,85 @@
 #!/bin/bash
 
-#──────────────────────────────────────#
-#   Academi VPN - WARP Activator       #
-#   Telegram: @Academi_vpn / Admin: Mahdi  #
-#──────────────────────────────────────#
+#────────────────────────────#
+#     Academi WARP Tools     #
+#     Telegram: @Academi_vpn #
+#────────────────────────────#
 
-# رنگ‌ها
 GREEN='\e[32m'
 BLUE='\e[34m'
 RED='\e[31m'
 RESET='\e[0m'
 
+show_menu() {
+    echo -e "${BLUE}┌────────────────────────────┐${RESET}"
+    echo -e "${BLUE}│  Academi VPN Main Menu     │${RESET}"
+    echo -e "${BLUE}├────────────────────────────┤${RESET}"
+    echo -e "  [1] WARP IPv4 Scanner"
+    echo -e "  [2] Telegram Proxy Viewer"
+    echo -e "  [0] Exit"
+    echo -e "${BLUE}└────────────────────────────┘${RESET}"
+}
+
+warp_scanner() {
+    echo -e "\n${BLUE}🔍 Scanning best WARP IPv4 IPs...${RESET}"
+
+    PORTS=(80 443 8080 8443)
+    MAX_IPS=10
+    > good_ips.txt
+
+    count=0
+
+    while [[ $count -lt $MAX_IPS ]]; do
+        IP=$(curl -s https://cloudflare.com/cdn-cgi/trace | grep ip= | cut -d= -f2 | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}')
+        
+        if [[ -z "$IP" ]]; then
+            continue
+        fi
+
+        for PORT in "${PORTS[@]}"; do
+            timeout 1 bash -c "cat < /dev/null > /dev/tcp/$IP/$PORT" 2>/dev/null
+            if [[ $? -eq 0 ]]; then
+                PING_MS=$(ping -c 1 -W 1 $IP | grep 'time=' | awk -F'time=' '{print $2}' | cut -d' ' -f1)
+                if [[ -n "$PING_MS" ]]; then
+                    echo "$IP:$PORT  $PING_MS ms" >> good_ips.txt
+                    ((count++))
+                    break
+                fi
+            fi
+        done
+    done
+
+    echo -e "${GREEN}\n✅ Top $MAX_IPS Working WARP IPs:${RESET}"
+    cat good_ips.txt
+    echo ""
+}
+
+telegram_proxy_viewer() {
+    echo -e "\n${BLUE}📢 Telegram Proxy List:${RESET}"
+
+    # 📝 این لیست رو خودت می‌تونی روزانه ویرایش کنی:
+    proxies=(
+        "tg://proxy?server=proxy1.academi.ir&port=443&secret=ee00000000000000000000000000000000000000"
+        "tg://proxy?server=proxy2.academi.ir&port=443&secret=ee00000000000000000000000000000000000000"
+        "tg://proxy?server=proxy3.academi.ir&port=443&secret=ee00000000000000000000000000000000000000"
+    )
+
+    for proxy in "${proxies[@]}"; do
+        echo -e "${GREEN}- $proxy${RESET}"
+    done
+
+    echo ""
+}
+
+# Start
 clear
-echo -e "${GREEN}📡 Academi VPN - Auto WARP Setup (WireGuard)"
-echo -e "${BLUE}🔗 Telegram: @Academi_vpn${RESET}\n"
-
-# بررسی دسترسی روت (در termux لازم نیست)
-if [[ "$(id -u)" != "0" ]] && [[ "$PREFIX" == "" ]]; then
-  echo -e "${RED}❌ Please run as root.${RESET}"
-  exit 1
-fi
-
-# نصب ابزارهای مورد نیاز
-echo -e "${BLUE}[*] Installing dependencies...${RESET}"
-pkg update -y && pkg install -y curl wget unzip wireguard-tools resolv-conf
-
-# بررسی معماری دستگاه
-ARCH=$(uname -m)
-WGCF_URL=""
-if [[ $ARCH == "aarch64" ]]; then
-  WGCF_URL="https://github.com/ViRb3/wgcf/releases/download/v2.2.20/wgcf_2.2.20_linux_arm64"
-elif [[ $ARCH == "armv7l" ]]; then
-  WGCF_URL="https://github.com/ViRb3/wgcf/releases/download/v2.2.20/wgcf_2.2.20_linux_arm"
-elif [[ $ARCH == "x86_64" ]]; then
-  WGCF_URL="https://github.com/ViRb3/wgcf/releases/download/v2.2.20/wgcf_2.2.20_linux_amd64"
-else
-  echo -e "${RED}❌ Unsupported architecture: $ARCH${RESET}"
-  exit 1
-fi
-
-# دانلود و نصب wgcf
-echo -e "${BLUE}[*] Downloading wgcf binary...${RESET}"
-wget -q "$WGCF_URL" -O wgcf && chmod +x wgcf
-mv wgcf /data/data/com.termux/files/usr/bin/ 2>/dev/null || mv wgcf /usr/local/bin/
-
-# ثبت حساب Cloudflare
-echo -e "${BLUE}[*] Registering WARP account...${RESET}"
-wgcf delete >/dev/null 2>&1
-wgcf register --accept-tos >/dev/null 2>&1
-if [[ $? -ne 0 ]]; then
-  echo -e "${RED}❌ Failed to register with Cloudflare.${RESET}"
-  exit 1
-fi
-
-# ساخت فایل کانفیگ
-echo -e "${BLUE}[*] Generating WireGuard config...${RESET}"
-wgcf generate >/dev/null 2>&1
-mkdir -p ~/academi-warp
-mv wgcf-profile.conf ~/academi-warp/wgcf.conf
-CONFIG=~/academi-warp/wgcf.conf
-
-# تنظیم DNS
-echo -e "nameserver 1.1.1.1" > $PREFIX/etc/resolv.conf
-
-# فعال‌سازی WARP
-echo -e "${BLUE}[*] Starting WARP...${RESET}"
-wg-quick down wgcf >/dev/null 2>&1
-wg-quick up $CONFIG >/dev/null 2>&1
-
-if [[ $? -eq 0 ]]; then
-  echo -e "${GREEN}\n✅ WARP is now active!${RESET}"
-else
-  echo -e "${RED}\n❌ Failed to activate WARP.${RESET}"
-  exit 1
-fi
-
-# تست نهایی اتصال
-echo -e "${BLUE}\n🌐 Checking WARP status...${RESET}"
-curl -s https://www.cloudflare.com/cdn-cgi/trace | grep -E 'ip=|warp='
-
-# پایان
-echo -e "\n${GREEN}🎉 Done! Your connection is now routed through WARP.${RESET}"
+while true; do
+    show_menu
+    read -p $'\nChoose an option: ' choice
+    case "$choice" in
+        1) warp_scanner ;;
+        2) telegram_proxy_viewer ;;
+        0) echo -e "${RED}Exiting...${RESET}"; exit ;;
+        *) echo -e "${RED}❌ Invalid option!${RESET}" ;;
+    esac
+done
