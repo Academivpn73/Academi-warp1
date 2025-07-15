@@ -1,85 +1,106 @@
 #!/bin/bash
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#     Academi VPN Script v1.0.3
-#     Telegram: @Academi_vpn
-#     Support: @MahdiAGM0
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# ╔═╗┌─┐┬─┐┬ ┬┌┬┐┌─┐┬
+# ║  ├┤ ├┬┘└┬┘ │ ├┤ │
+# ╚═╝└─┘┴└─ ┴  ┴ └─┘┴─┘
 
-RED=$(tput setaf 1)
-GREEN=$(tput setaf 2)
-CYAN=$(tput setaf 6)
-YELLOW=$(tput setaf 3)
-RESET=$(tput sgr0)
+# ▶ Version and Info
+VERSION="1.0.0"
+CHANNEL="Telegram: @Academi_vpn"
+SUPPORT="Admin: @MahdiAGM0"
 
-function header() {
-  clear
-  echo "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo "${GREEN}      Academi VPN Script - Version 1.0.3"
-  echo "${YELLOW}      Telegram: @Academi_vpn"
-  echo "${YELLOW}      Support: @MahdiAGM0"
-  echo "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-  echo
+# ▶ Color Codes
+GREEN='\e[1;32m'
+YELLOW='\e[1;33m'
+BLUE='\e[1;34m'
+RED='\e[1;31m'
+NC='\e[0m'
+
+# ▶ Check & install dependencies
+install_dependencies() {
+    for pkg in curl jq; do
+        if ! command -v $pkg &>/dev/null; then
+            echo -e "${YELLOW}Installing $pkg...${NC}"
+            apt update -y >/dev/null 2>&1
+            apt install -y $pkg >/dev/null 2>&1
+        fi
+    done
 }
 
-function install_requirements() {
-  echo "${CYAN}Installing required packages...${RESET}"
-  pkg install curl jq -y > /dev/null 2>&1
+# ▶ Header
+show_header() {
+    clear
+    echo -e "${BLUE}=============================="
+    echo -e "${GREEN}    Academi Multi Tool"
+    echo -e "${YELLOW}        Version: $VERSION"
+    echo -e "${BLUE}=============================="
+    echo -e "${GREEN}$CHANNEL"
+    echo -e "${GREEN}$SUPPORT"
+    echo -e "${BLUE}==============================${NC}"
 }
 
-function menu() {
-  echo "${GREEN}[1]${RESET} WARP IP Scanner (IPv4)"
-  echo "${GREEN}[2]${RESET} Telegram Proxy List"
-  echo "${GREEN}[0]${RESET} Exit"
-  echo
-  read -rp "${CYAN}Choose an option: ${RESET}" opt
-  case "$opt" in
-    1) warp_scanner ;;
-    2) telegram_proxies ;;
-    0) echo "${YELLOW}Exiting.${RESET}"; exit 0 ;;
-    *) echo "${RED}Invalid choice.${RESET}"; sleep 1; main ;;
-  esac
+# ▶ WARP IP Scanner (IPv4 only)
+warp_scanner() {
+    echo -e "${YELLOW}Scanning best WARP IPv4 IPs...${NC}"
+
+    mkdir -p Academi_Configs
+    > live_ips.txt
+
+    COUNT=0
+    while [ $COUNT -lt 10 ]; do
+        IP=$(curl -s --connect-timeout 2 https://api64.ipify.org)
+        [ -z "$IP" ] && continue
+
+        for PORT in 80 443 8080 8443; do
+            ping_result=$(ping -c1 -W1 $IP 2>/dev/null)
+            if echo "$ping_result" | grep -q 'time='; then
+                LATENCY=$(echo "$ping_result" | grep 'time=' | awk -F'time=' '{print $2}' | cut -d' ' -f1)
+                echo "$IP:$PORT  Ping: ${LATENCY}ms" | tee -a live_ips.txt
+                ((COUNT++))
+                break
+            fi
+        done
+    done
+
+    echo -e "\n${GREEN}✔ Done. Total working IPs: $COUNT${NC}"
 }
 
-function warp_scanner() {
-  echo
-  echo "${CYAN}Scanning best WARP IPv4 IPs...${RESET}"
-  found=0
-  for i in {1..100}; do
-    IP="162.159.$((RANDOM % 256)).$((RANDOM % 256))"
-    PORT=$(shuf -n 1 -e 80 443 8080 8443 2053 2083 2087 2096)
-    ping_time=$(ping -c1 -W1 $IP | grep 'time=' | sed -E 's/.*time=([0-9.]+) ms/\1/')
-    if [[ ! -z "$ping_time" ]]; then
-      echo "${GREEN}$IP:$PORT${RESET}  Ping: ${YELLOW}${ping_time}ms${RESET}"
-      ((found++))
-    fi
-    [[ $found -ge 10 ]] && break
-  done
-  [[ $found -eq 0 ]] && echo "${RED}❌ No working IPs found.${RESET}"
-  echo
-  read -p "Press Enter to return..."
+# ▶ Proxy Updater
+update_proxies() {
+    echo -e "${BLUE}Updating Telegram MTProto proxies...${NC}"
+    curl -s "https://raw.githubusercontent.com/aliilapro/mtproto-proxies/main/mtproto.txt" -o proxies.txt
+    [[ -s proxies.txt ]] && echo -e "${GREEN}✔ Updated successfully.${NC}" || echo -e "${RED}❌ Failed to update.${NC}"
 }
 
-function telegram_proxies() {
-  echo
-  echo "${CYAN}Fetching Telegram proxies...${RESET}"
-  proxies=$(curl -s "https://api.openproxylist.xyz/tg" | jq -r '.[] | "tg://proxy?server=\(.host)&port=\(.port)&secret=\(.secret)"' | head -n 10)
-  if [[ -z "$proxies" ]]; then
-    echo "${RED}No proxies found.${RESET}"
-  else
-    echo "${GREEN}$proxies${RESET}"
-  fi
-  echo
-  read -p "Press Enter to return..."
+# ▶ Proxy Viewer
+show_proxies() {
+    [[ ! -f proxies.txt ]] && update_proxies
+    echo -e "${YELLOW}\n📡 Telegram Proxies (Top 10):${NC}"
+    nl proxies.txt | head -n 10
+    echo -e "${BLUE}\nLast Updated: $(date)${NC}"
 }
 
-function main() {
-  header
-  install_requirements
-  while true; do
-    header
-    menu
-  done
+# ▶ Main Menu
+main_menu() {
+    show_header
+    echo -e "${YELLOW}1) WARP IPv4 Scanner"
+    echo -e "2) Telegram Proxy List"
+    echo -e "0) Exit${NC}"
+    echo -ne "${BLUE}Choose an option: ${NC}"
+    read opt
+
+    case $opt in
+        1) warp_scanner ;;
+        2) show_proxies ;;
+        0) exit ;;
+        *) echo -e "${RED}❌ Invalid option${NC}"; sleep 1 ;;
+    esac
 }
 
-main
+# ▶ Main Loop
+install_dependencies
+while true; do
+    main_menu
+    echo -ne "${BLUE}\nPress enter to return to menu...${NC}"
+    read
+done
