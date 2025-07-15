@@ -1,130 +1,121 @@
 #!/bin/bash
 
-#=====[ Config ]=====
+VERSION="1.7.1"
 ADMIN="@MahdiAGM0"
 CHANNEL="@Academi_vpn"
-VERSION="1.7.0"
-CRON_JOB="/etc/cron.daily/proxy_update"
-INSTALLER_NAME="Academivpn_warp"
 
-#=====[ Check dependencies ]=====
-check_dependencies() {
-  for pkg in curl jq ping crontab; do
-    if ! command -v $pkg &> /dev/null; then
-      echo "Installing missing package: $pkg"
-      apt update -y &>/dev/null
-      apt install -y $pkg &>/dev/null
-    fi
-  done
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+BLUE='\033[1;34m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+# ✅ Install required packages
+install_packages() {
+  echo -e "${BLUE}Installing required packages...${NC}"
+  apt update -y >/dev/null 2>&1
+  apt install curl wget jq cron net-tools bc -y >/dev/null 2>&1
+  systemctl enable cron >/dev/null 2>&1
+  systemctl start cron >/dev/null 2>&1
 }
 
-#=====[ Display Title ]=====
-print_title() {
-  clear
-  echo -e "\e[1;32m=============================="
-  echo -e "  Telegram: $CHANNEL"
-  echo -e "  Admin: $ADMIN"
-  echo -e "  Version: $VERSION"
-  echo -e "==============================\e[0m"
+# ✅ Title Banner
+show_title() {
+  echo -e "${CYAN}╔══════════════════════════════════════╗"
+  echo -e "║   Telegram: ${CHANNEL}"
+  echo -e "║   Admin:    ${ADMIN}"
+  echo -e "║   Version:  ${VERSION}"
+  echo -e "╚══════════════════════════════════════╝${NC}\n"
 }
 
-#=====[ WARP IP Scanner ]=====
-scan_warp_ips() {
-  echo -e "\n🔎 Scanning WARP IPs...\n"
+# ✅ WARP IP Scanner
+scan_warp() {
+  echo -e "${BLUE}🔍 Scanning WARP servers...${NC}"
   for i in {1..10}; do
-    IP=$(shuf -i 1-255 -n1).$(shuf -i 1-255 -n1).$(shuf -i 1-255 -n1).$(shuf -i 1-255 -n1)
-    PORT=$((RANDOM%65535+1))
-    PING=$(ping -c 1 -W 1 $IP | grep 'time=' | awk -F'time=' '{print $2}' | cut -d' ' -f1)
-    if [[ -n "$PING" ]]; then
-      echo -e "\e[32m$IP:$PORT  ${PING}ms\e[0m"
-    else
-      echo -e "$IP:$PORT  Timeout"
-    fi
+    IP=$(shuf -i 1-255 -n 4 | paste -sd .)
+    PORT=$((RANDOM % 64512 + 1024))
+    (ping -c1 -W1 "$IP" >/dev/null 2>&1 && echo -e "${GREEN}✅ $IP:$PORT  Ping: $(ping -c1 -W1 $IP | grep 'time=' | awk -F'time=' '{print $2}' | cut -d' ' -f1) ms${NC}") || echo -e "${RED}❌ $IP:$PORT  Unreachable${NC}"
   done
 }
 
-#=====[ Telegram Proxies ]=====
-fetch_telegram_proxies() {
-  echo -e "\n🔄 Fetching Telegram proxies..."
+# ✅ Fetch Telegram Proxies
+fetch_proxies() {
+  echo -e "${BLUE}\n🔄 Fetching Telegram proxies...${NC}"
+  TMP=$(mktemp)
+  curl -s --max-time 15 https://api.ssn0.dev/proxy/all -o "$TMP"
 
-  TMP_FILE=$(mktemp)
-  curl -s --max-time 10 https://raw.githubusercontent.com/peasoft/mtprotoproxy-telegram/master/proxies.json -o "$TMP_FILE"
-
-  if [[ ! -s "$TMP_FILE" ]]; then
-    echo "❌ Failed to fetch proxies"
+  if [[ ! -s "$TMP" ]]; then
+    echo -e "${RED}❌ Failed to fetch proxy data.${NC}"
     return
   fi
 
-  PROXIES=$(grep -oP '(?<=link": ")[^"]+' "$TMP_FILE" | head -n 10)
-  rm -f "$TMP_FILE"
+  LINKS=$(jq -r '.[] | select(.type=="tg") | .link' "$TMP" | head -n 10)
 
-  if [[ -z "$PROXIES" ]]; then
-    echo "❌ No working Telegram proxies found."
+  if [[ -z "$LINKS" ]]; then
+    echo -e "${RED}❌ No working Telegram proxies found.${NC}"
     return
   fi
 
   i=1
-  echo
-  for proxy in $PROXIES; do
-    echo -e "Proxy $i:\n🔗 \e[36m$proxy\e[0m"
+  echo ""
+  for proxy in $LINKS; do
+    echo -e "${GREEN}Proxy $i:${NC} $proxy"
     ((i++))
   done
 }
 
-#=====[ Daily Proxy Auto-Update ]=====
-setup_cron() {
-  cat <<EOF > "$CRON_JOB"
-#!/bin/bash
-curl -s --max-time 10 https://raw.githubusercontent.com/peasoft/mtprotoproxy-telegram/master/proxies.json -o /tmp/proxy_update.json
-EOF
-  chmod +x "$CRON_JOB"
+# ✅ Install cronjob for daily update
+setup_daily_update() {
+  CRON_JOB="@daily bash $0 --cron-fetch"
+  crontab -l 2>/dev/null | grep -v 'cron-fetch' | { cat; echo "$CRON_JOB"; } | crontab -
 }
 
-#=====[ Installer Management ]=====
-installer_menu() {
-  echo -e "\n🛠️ Installer Management:"
-  echo "1) Enable Installer ($INSTALLER_NAME)"
-  echo "2) Remove Installer"
-  read -p "Choose: " opt
-  case $opt in
-    1)
-      echo "bash $PWD/$0" > /usr/local/bin/$INSTALLER_NAME
-      chmod +x /usr/local/bin/$INSTALLER_NAME
-      echo "✅ Installer enabled: use command '$INSTALLER_NAME'"
-      ;;
-    2)
-      rm -f /usr/local/bin/$INSTALLER_NAME
-      echo "✅ Installer removed"
-      ;;
-    *)
-      echo "❌ Invalid option"
-      ;;
-  esac
+# ✅ Installer creation
+create_installer() {
+  echo -e "${BLUE}📦 Creating installer command...${NC}"
+  echo "bash $(realpath $0)" > /usr/local/bin/Academivpn_warp
+  chmod +x /usr/local/bin/Academivpn_warp
+  echo -e "${GREEN}✅ You can now run with: ${CYAN}Academivpn_warp${NC}"
 }
 
-#=====[ Main Menu ]=====
+# ✅ Remove installer
+remove_installer() {
+  rm -f /usr/local/bin/Academivpn_warp
+  echo -e "${RED}❌ Installer removed.${NC}"
+}
+
+# ✅ Menu
 main_menu() {
   while true; do
-    print_title
-    echo "1) WARP IP Scanner"
+    clear
+    show_title
+    echo -e "${CYAN}1) Warp IP Scanner"
     echo "2) Telegram Proxies"
-    echo "3) Installer Manager"
-    echo "4) Exit"
-    echo -n "Choose an option: "
-    read -r option
-    case $option in
-      1) scan_warp_ips ;;
-      2) fetch_telegram_proxies ;;
-      3) installer_menu ;;
-      4) echo "Goodbye 👋"; exit ;;
-      *) echo "❌ Invalid option" ;;
+    echo "3) Enable Installer (Academivpn_warp)"
+    echo "4) Remove Installer"
+    echo "5) Exit${NC}"
+    echo -ne "\nChoose an option: "
+    read -r choice
+    case "$choice" in
+      1) scan_warp ;;
+      2) fetch_proxies ;;
+      3) create_installer ;;
+      4) remove_installer ;;
+      5) echo -e "${BLUE}Exiting...${NC}"; exit 0 ;;
+      *) echo -e "${RED}Invalid choice.${NC}" ;;
     esac
-    echo -e "\nPress Enter to return to menu..."
+    echo -ne "\nPress Enter to continue..."
     read
   done
 }
 
-#=====[ Run ]=====
-check_dependencies
-setup_cron
+# ✅ Cron-mode execution
+if [[ $1 == "--cron-fetch" ]]; then
+  fetch_proxies > /dev/null 2>&1
+  exit 0
+fi
+
+# Run everything
+install_packages
+setup_daily_update
 main_menu
