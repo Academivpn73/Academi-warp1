@@ -1,146 +1,108 @@
 #!/bin/bash
 
-CONFIG_DIR="Academi_Configs"
-mkdir -p "$CONFIG_DIR"
+mkdir -p Academi_Configs
 
+RED='\033[0;31m'
 GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
 NC='\033[0m'
 
-# Cloudflare Warp public key
-WARP_PUBLIC_KEY="ziJrVCgPNg9g9bCIs7paGVaI3azH/Nz6DCQE/3nXyU8="
-
-# Ports to test
-PORTS=(80 443 8080 8443 2052 2082 2086 2095 8880)
-
-function main_menu() {
-  clear
-  echo -e "${YELLOW}Academi VPN - Warp Toolkit${NC}"
-  echo "1) WARP IP Scanner"
-  echo "2) WireGuard + V2Ray Config Generator"
-  echo "0) Exit"
-  echo -n "Choose an option: "
-  read choice
-
-  case "$choice" in
-    1) warp_ip_scanner ;;
-    2) wireguard_v2ray_config ;;
-    0) exit ;;
-    *) echo "Invalid choice."; sleep 1; main_menu ;;
-  esac
+print_menu() {
+  echo ""
+  echo "========== Academi VPN Tool =========="
+  echo "1. Warp IP Scanner"
+  echo "2. WireGuard + V2Ray Config Generator"
+  echo "0. Exit"
+  echo "======================================"
+  echo -n "Select an option: "
 }
 
-function get_ping() {
-  ip=$1
-  ping -c 1 -W 1 "$ip" | grep 'time=' | sed -E 's/.*time=([0-9.]+) ms/\1/'
-}
-
-function get_country_flag() {
-  ip=$1
-  code=$(curl -sL "https://ipinfo.io/$ip/country")
-  if [[ ${#code} -eq 2 ]]; then
-    for ((i=0; i<${#code}; i++)); do
-      flag+=$(echo ${code:$i:1} | tr 'A-Z' '\U1F1E6-\U1F1FF')
-    done
-    echo "$flag"
-  else
-    echo "🏳️"
-  fi
-}
-
-function is_port_open() {
-  ip=$1
-  port=$2
-  timeout 1 bash -c "echo >/dev/tcp/$ip/$port" 2>/dev/null && echo "open" || echo "closed"
-}
-
-function generate_wg_config() {
-  ip=$1
-  port=$2
-  private_key=$(wg genkey)
-  public_key=$(echo "$private_key" | wg pubkey)
-  endpoint="$ip:$port"
-  country_flag=$(get_country_flag "$ip")
-
-  config_file="$CONFIG_DIR/wg_${ip//./_}.conf"
-
-  cat > "$config_file" <<EOF
-# Telegram:@Academi_vpn $country_flag
-[Interface]
-PrivateKey = $private_key
-Address = 172.16.0.2/32
-DNS = 1.1.1.1
-
-[Peer]
-PublicKey = $WARP_PUBLIC_KEY
-AllowedIPs = 0.0.0.0/0
-Endpoint = $endpoint
-PersistentKeepalive = 25
-EOF
-
-  echo -e "${GREEN}✔ Saved: $config_file${NC}"
-}
-
-function warp_ip_scanner() {
-  echo -e "\n${YELLOW}Starting WARP IP scan for 10 IPs...${NC}"
+warp_scanner() {
+  echo ""
+  echo "🔍 Scanning Warp IPs..."
   count=0
-
-  while [[ $count -lt 10 ]]; do
-    ip="162.159.$((RANDOM % 255)).$((RANDOM % 255))"
-    ping_time=$(get_ping "$ip")
-
-    if [[ -n "$ping_time" ]]; then
-      for port in "${PORTS[@]}"; do
-        status=$(is_port_open "$ip" "$port")
-        if [[ "$status" == "open" ]]; then
-          echo -e "$ip:$port  Ping: ${GREEN}${ping_time}ms${NC}"
-          generate_wg_config "$ip" "$port"
+  while [ $count -lt 10 ]; do
+    ip="162.159.$((RANDOM % 256)).$((RANDOM % 256))"
+    for port in 80 443 8080 8443; do
+      (echo > /dev/tcp/$ip/$port) >/dev/null 2>&1
+      if [ $? -eq 0 ]; then
+        ping_result=$(ping -c1 -W1 $ip | grep 'time=' | awk -F'time=' '{print $2}' | cut -d' ' -f1)
+        if [ ! -z "$ping_result" ]; then
+          echo -e "${GREEN}${ip}:${port}  Ping: ${ping_result}ms${NC}"
           ((count++))
           break
         fi
-      done
-    fi
+      fi
+    done
   done
-
-  echo -e "${YELLOW}Scan complete. 10 IPs processed.${NC}"
-  read -p "Press Enter to return to main menu..." temp
-  main_menu
 }
 
-function wireguard_v2ray_config() {
-  echo -e "\n${YELLOW}WireGuard + V2Ray Config Generator${NC}"
-  read -p "How many configs do you want? (1 or 2): " howmany
+generate_wg_v2ray_config() {
+  echo ""
+  echo "🔧 Generating WireGuard + V2Ray Config..."
+  
+  # Sample WG config template (random IP and keys here for demo)
+  private_key=$(wg genkey)
+  public_key=$(echo "$private_key" | wg pubkey)
+  ip="162.159.$((RANDOM % 256)).$((RANDOM % 256))"
+  conf_name="wg_${ip//./_}.conf"
+  conf_path="Academi_Configs/$conf_name"
 
-  for ((i = 1; i <= howmany; i++)); do
-    echo -e "\nConfig #$i"
-    read -p "Enter endpoint IP:Port (e.g. 1.1.1.1:443): " endpoint
-    read -p "Enter Country Code (e.g. US): " cc
-
-    private_key=$(wg genkey)
-    public_key=$(echo "$private_key" | wg pubkey)
-    flag=$(echo "$cc" | tr 'A-Z' '🇦🇦')
-    config_file="$CONFIG_DIR/v2ray_wg_${cc}_$i.conf"
-
-    cat > "$config_file" <<EOF
-# Telegram:@Academi_vpn $flag
+  cat > $conf_path << EOF
 [Interface]
 PrivateKey = $private_key
 Address = 172.16.0.2/32
 DNS = 1.1.1.1
 
 [Peer]
-PublicKey = $WARP_PUBLIC_KEY
+PublicKey = $(wg genkey | wg pubkey)
+Endpoint = $ip:443
 AllowedIPs = 0.0.0.0/0
-Endpoint = $endpoint
 PersistentKeepalive = 25
 EOF
 
-    echo -e "${GREEN}✔ WireGuard config $i saved: $config_file${NC}"
-  done
+  # Mock Country Flag – can be replaced with real API later
+  country_flag="🇺🇸"
 
-  echo -e "${YELLOW}Done generating $howmany config(s).${NC}"
-  read -p "Press Enter to return to main menu..." temp
-  main_menu
+  # V2Ray JSON Template
+  v2ray_json="Academi_Configs/v2ray_${ip//./_}.json"
+  cat > $v2ray_json << EOF
+{
+  "inbounds": [{
+    "port": 10808,
+    "protocol": "socks",
+    "settings": {
+      "auth": "noauth",
+      "udp": true
+    }
+  }],
+  "outbounds": [{
+    "protocol": "wireguard",
+    "settings": {
+      "secretKey": "$private_key",
+      "address": ["172.16.0.2/32"],
+      "peers": [{
+        "publicKey": "$(wg genkey | wg pubkey)",
+        "endpoint": "$ip:443",
+        "persistentKeepalive": 25
+      }]
+    }
+  }],
+  "tag": "AcademiVPN",
+  "remarks": "Telegram:@Academi_vpn $country_flag"
+}
+EOF
+
+  echo -e "${GREEN}✔ Saved: $conf_path"
+  echo -e "✔ Saved: $v2ray_json${NC}"
 }
 
-main_menu
+while true; do
+  print_menu
+  read option
+  case $option in
+    1) warp_scanner ;;
+    2) generate_wg_v2ray_config ;;
+    0) echo "Goodbye!"; exit ;;
+    *) echo -e "${RED}Invalid option!${NC}" ;;
+  esac
+done
